@@ -115,9 +115,12 @@ struct ContentView: View {
         .onAppear {
             dependencies.log?.scrollVerticallyToBottom()
             DispatchQueue.global(qos: .utility).async {
-                let status = run_once("~/.bin/battery_tracker", ["status"]) ?? "(no output)"
-                DispatchQueue.main.async {
-                    self.lastBatteryStatus = status.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let exeDir = Bundle.main.executableURL?.deletingLastPathComponent() {
+                    let exe = exeDir.appendingPathComponent("battery_tracker").path
+                    let status = run_once(exe, ["status"]) ?? "(no output)"
+                    DispatchQueue.main.async {
+                        self.lastBatteryStatus = status.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
                 }
             }
         }
