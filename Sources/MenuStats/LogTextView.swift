@@ -8,9 +8,24 @@ struct LogTextView: NSViewRepresentable {
         let textView: NSTextView
         private(set) var lineCount: Int = 0
         private var capacity: Int = 1000   // единственный источник правды
+        
+        private var lastTimeShown: String = ""
+        private static let sepParagraph: NSParagraphStyle = {
+            let p = NSMutableParagraphStyle()
+            p.lineBreakMode = .byClipping
+            p.alignment = .center
+            return p
+        }()
+        private static let timeFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.locale = .autoupdatingCurrent
+            f.dateFormat = "HH:mm"
+            return f
+        }()
 
         init(textView: NSTextView) {
             self.textView = textView
+            lastTimeShown = Self.timeFormatter.string(from: Date())
         }
 
         // Меняем лимит строк; сразу подрезаем лишнее, если уже превышен
@@ -23,6 +38,8 @@ struct LogTextView: NSViewRepresentable {
         func appendLine(_ line: String) {
             guard !line.isEmpty else { return }
             let shouldAutoscroll = isAtBottom(threshold: 4)
+
+            appendMinuteSeparatorIfNeeded()
 
             let s = textView.string.isEmpty ? line : "\n" + line
             textView.textStorage?.append(attributedFromANSI(s))
@@ -54,6 +71,23 @@ struct LogTextView: NSViewRepresentable {
         }
 
         // MARK: - Внутренние утилиты
+
+        private func appendMinuteSeparatorIfNeeded(now: Date = Date()) {
+            let hhmm = Self.timeFormatter.string(from: now)
+            guard lastTimeShown != hhmm else { return }
+            lastTimeShown = hhmm
+
+            let line = NSAttributedString(
+                string: "\n      \(hhmm)",
+                attributes: [
+                    .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
+                    .foregroundColor:NSColor.secondaryLabelColor,
+                    .paragraphStyle: Self.sepParagraph
+                ]
+            )
+            textView.textStorage?.append(line)
+            lineCount += 1
+        }
 
         private func isAtBottom(threshold: CGFloat = 0) -> Bool {
             return textView.visibleRect.maxY >= textView.bounds.height - threshold
