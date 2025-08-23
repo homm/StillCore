@@ -17,7 +17,6 @@ final class StreamedProcess: ObservableObject {
         let mid = Pipe()
         let out = Pipe()
         let err = Pipe()
-        let powErr = Pipe()
         self.midPipe = mid
         self.outPipe = out
         self.errPipe = err
@@ -26,9 +25,9 @@ final class StreamedProcess: ObservableObject {
         pow.launchPath = "/usr/bin/sudo"
         pow.arguments = ["-n", "/usr/bin/powermetrics"] + powerMetricsArgs
         pow.standardOutput = mid
-        pow.standardError = powErr
+        pow.standardError = err
 
-        powErr.fileHandleForReading.readabilityHandler = { handler in
+        err.fileHandleForReading.readabilityHandler = { handler in
             let data = handler.availableData
             if data.isEmpty {
                 handler.readabilityHandler = nil
@@ -42,17 +41,18 @@ final class StreamedProcess: ObservableObject {
         gau.launchPath = pGaugeCommand
         gau.standardInput = mid
         gau.standardOutput = out
-        gau.standardError = err
 
         out.fileHandleForReading.readabilityHandler = { handler in
-            let data = handler.availableData
-            if data.isEmpty {
-                handler.readabilityHandler = nil
-            } else if let s = String(data: data, encoding: .utf8) {
-                s.split(whereSeparator: \.isNewline)
-                    .forEach { line in
-                        Task { @MainActor in lineHandler(String(line)) }
-                    }
+            autoreleasepool {
+                let data = handler.availableData
+                if data.isEmpty {
+                    handler.readabilityHandler = nil
+                } else if let s = String(data: data, encoding: .utf8) {
+                    s.split(whereSeparator: \.isNewline)
+                        .forEach { line in
+                            Task { @MainActor in lineHandler(String(line)) }
+                        }
+                }
             }
         }
         
