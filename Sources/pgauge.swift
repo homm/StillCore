@@ -5,7 +5,6 @@ import Foundation
 struct FileHandleLineSequence: Sequence, IteratorProtocol {
     let handle: FileHandle
     private let NL: UInt8 = 0x0A
-    private let chunkSize = 16 * 1024
     private let compactThreshold = 64 * 1024
 
     private var buffer = Data()
@@ -38,10 +37,13 @@ struct FileHandleLineSequence: Sequence, IteratorProtocol {
                 return nil
             }
 
-            if let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
-                buffer.append(chunk)
-            } else {
-                eof = true
+            autoreleasepool {
+                let chunk = handle.availableData
+                if !chunk.isEmpty {
+                    buffer.append(chunk)
+                } else {
+                    eof = true
+                }
             }
         }
     }
@@ -329,9 +331,10 @@ func main() {
 
     for plist in plists {
         if let proc = plist["processor"] as? [String : Any] {
-            _ = printer.feed(proc)
+            autoreleasepool {
+                _ = printer.feed(proc)
+            }
         }
-        // break
     }
 }
 

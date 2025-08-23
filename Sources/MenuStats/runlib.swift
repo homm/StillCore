@@ -49,7 +49,7 @@ final class StreamedProcess: ObservableObject {
                 handler.readabilityHandler = nil
             } else if let s = String(data: data, encoding: .utf8) {
                 log.error("Log string \(s, privacy: .public)")
-                s.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+                s.split(whereSeparator: \.isNewline)
                     .forEach { line in 
                         log.error("Log line \(line, privacy: .public)")
                         lineHandler(String(line))
