@@ -34,7 +34,8 @@ func attributedFromANSI(_ input: String) -> NSAttributedString {
                 attributes[.font] = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
             case 1: // bold
                 attributes[.font] = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-            case 39: attributes[.foregroundColor] = NSColor.labelColor
+            case 2: // dim
+                attributes[.foregroundColor] = NSColor.labelColor.withAlphaComponent(0.4)
 
             case 30: attributes[.foregroundColor] = NSColor.black
             case 31: attributes[.foregroundColor] = NSColor.systemRed
@@ -44,6 +45,7 @@ func attributedFromANSI(_ input: String) -> NSAttributedString {
             case 35: attributes[.foregroundColor] = NSColor.magenta
             case 36: attributes[.foregroundColor] = NSColor.systemCyan
             case 37: attributes[.foregroundColor] = NSColor.white
+            case 39: attributes[.foregroundColor] = NSColor.labelColor
 
             default: break
             }

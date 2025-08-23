@@ -1,54 +1,88 @@
 import AppKit
 
 final class StreamedProcess: ObservableObject {
-    private var task: Process?
-    private var stdoutPipe: Pipe?
-    @Published var isRunning = false
+    private var powermetrics: Process?
+    private var pgauge: Process?
+    private var midPipe: Pipe?
+    private var outPipe: Pipe?
+    private var errPipe: Pipe?
 
     func start(
-        command: String,
-        args: [String] = [],
-        workingDir: URL? = nil,
+        pGaugeCommand: String,
+        powerMetricsArgs: [String] = [],
         lineHandler: @escaping (String) -> Void
     ) {
         stop()
 
-        let task = Process()
-        task.launchPath = command
-        task.arguments = args
-        if let wd = workingDir { task.currentDirectoryURL = wd }
-
+        let mid = Pipe()
         let out = Pipe()
-        task.standardOutput = out
-        self.stdoutPipe = out
+        let err = Pipe()
+        let powErr = Pipe()
+        self.midPipe = mid
+        self.outPipe = out
+        self.errPipe = err
 
-        out.fileHandleForReading.readabilityHandler = { h in
-            let data = h.availableData
-            if !data.isEmpty, let s = String(data: data, encoding: .utf8) {
+        let pow = Process()
+        pow.launchPath = "/usr/bin/sudo"
+        pow.arguments = ["-n", "/usr/bin/powermetrics"] + powerMetricsArgs
+        pow.standardOutput = mid
+        pow.standardError = powErr
+
+        powErr.fileHandleForReading.readabilityHandler = { handler in
+            let data = handler.availableData
+            if data.isEmpty {
+                handler.readabilityHandler = nil
+            } else if let s = String(data: data, encoding: .utf8) {
+                lineHandler("[powermetrics] \(s.trimmingCharacters(in: .whitespacesAndNewlines))")
+            }
+        }
+
+        let gau = Process()
+        gau.launchPath = pGaugeCommand
+        gau.standardInput = mid
+        gau.standardOutput = out
+        gau.standardError = err
+
+        out.fileHandleForReading.readabilityHandler = { handler in
+            let data = handler.availableData
+            if data.isEmpty {
+                handler.readabilityHandler = nil
+            } else if let s = String(data: data, encoding: .utf8) {
+                log.error("Log string \(s, privacy: .public)")
                 s.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
                     .forEach { line in 
+                        log.error("Log line \(line, privacy: .public)")
                         lineHandler(String(line))
                     }
             }
         }
 
+        self.pgauge = gau
+        self.powermetrics = pow
         do {
-            try task.run()
-            self.task = task
-            self.isRunning = true
+            try gau.run()
+            try pow.run()
         } catch {
             lineHandler("[error] failed to start: \(error.localizedDescription)")
+            stop()
+            return
         }
     }
 
     func stop() {
-        guard let t = task else { return }
-        t.terminate()
-        t.waitUntilExit()
-        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-        stdoutPipe = nil
-        task = nil
-        isRunning = false
+        outPipe?.fileHandleForReading.readabilityHandler = nil
+        errPipe?.fileHandleForReading.readabilityHandler = nil
+        midPipe = nil
+        outPipe = nil
+        errPipe = nil
+
+        powermetrics?.terminate()
+        pgauge?.terminate()
+        powermetrics?.waitUntilExit()
+        pgauge?.waitUntilExit()
+
+        powermetrics = nil
+        pgauge = nil
     }
 }
 

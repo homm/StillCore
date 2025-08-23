@@ -14,16 +14,15 @@ final class AppDependencies: ObservableObject {
     private var pendingLines: [String] = []
     let streamer = StreamedProcess()
 
-    // Подставь свою команду/аргументы
-    var streamCommand: String = "/Users/master/Code/_env/env_py39/bin/pgauge"
-    var streamArgs: [String] = "-s 0 -p -i".components(separatedBy: " ")
+    var streamArgs: [String] = "--samplers cpu_power --format plist -i".components(separatedBy: " ")
 
     func restartStream(_ interval: Int) {
-        streamer.stop()
+        guard let exeDir = Bundle.main.executableURL?.deletingLastPathComponent() else { return }
+        let exe = exeDir.appendingPathComponent("pgauge").path
 
         let args = streamArgs + [String(interval)]
         var headerSet = false
-        streamer.start(command: streamCommand, args: args) { [weak self] line in
+        streamer.start(pGaugeCommand: exe, powerMetricsArgs: args) { [weak self] line in
             guard let self else { return }
             DispatchQueue.main.async {
                 if !headerSet {
