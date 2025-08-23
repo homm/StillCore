@@ -4,6 +4,7 @@ struct LogTextView: NSViewRepresentable {
     /// Вернуть координатор наружу (чтобы писать в него и/или менять capacity)
     var onReady: (Coordinator) -> Void
 
+    @MainActor
     final class Coordinator {
         let textView: NSTextView
         private(set) var lineCount: Int = 0

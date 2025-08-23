@@ -6,6 +6,7 @@ let log = Logger(subsystem: "com.user.MenuStats", category: "stream")
 
 // MARK: - DI: точка доступа к лог-тексту и процессу
 
+@MainActor
 final class AppDependencies: ObservableObject {
     static let shared = AppDependencies()
 
@@ -77,6 +78,7 @@ struct ContentView: View {
 
             if !dependencies.logHeader.characters.isEmpty {
                 Text(dependencies.logHeader)
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, -8)
             }

@@ -10,7 +10,7 @@ final class StreamedProcess: ObservableObject {
     func start(
         pGaugeCommand: String,
         powerMetricsArgs: [String] = [],
-        lineHandler: @escaping (String) -> Void
+        lineHandler: @escaping @MainActor (String) -> Void
     ) {
         stop()
 
@@ -33,7 +33,8 @@ final class StreamedProcess: ObservableObject {
             if data.isEmpty {
                 handler.readabilityHandler = nil
             } else if let s = String(data: data, encoding: .utf8) {
-                lineHandler("[powermetrics] \(s.trimmingCharacters(in: .whitespacesAndNewlines))")
+                let msg = "[powermetrics] \(s.trimmingCharacters(in: .whitespacesAndNewlines))"
+                Task { @MainActor in lineHandler(msg) }
             }
         }
 
@@ -48,22 +49,21 @@ final class StreamedProcess: ObservableObject {
             if data.isEmpty {
                 handler.readabilityHandler = nil
             } else if let s = String(data: data, encoding: .utf8) {
-                log.error("Log string \(s, privacy: .public)")
                 s.split(whereSeparator: \.isNewline)
-                    .forEach { line in 
-                        log.error("Log line \(line, privacy: .public)")
-                        lineHandler(String(line))
+                    .forEach { line in
+                        Task { @MainActor in lineHandler(String(line)) }
                     }
             }
         }
-
-        self.pgauge = gau
-        self.powermetrics = pow
+        
         do {
             try gau.run()
+            self.pgauge = gau
             try pow.run()
+            self.powermetrics = pow
         } catch {
-            lineHandler("[error] failed to start: \(error.localizedDescription)")
+            let msg = "[error] failed to start: \(error.localizedDescription)"
+            Task { @MainActor in lineHandler(msg) }
             stop()
             return
         }
