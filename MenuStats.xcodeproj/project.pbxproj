@@ -8,20 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		B0A000012E5A000100000001 /* MacmonSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B0A000032E5A000100000001 /* MacmonSwift */; };
-		AFFC83252E59E0930095EE6D /* pgauge in CopyFiles */ = {isa = PBXBuildFile; fileRef = AF9514142E59D96100550A10 /* pgauge */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		AFFC83392E59EAD40095EE6D /* battery_tracker in CopyFiles */ = {isa = PBXBuildFile; fileRef = AFFC83322E59EA600095EE6D /* battery_tracker */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		AF9514122E59D96100550A10 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-		};
 		AFFC83242E59E0410095EE6D /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -29,7 +19,6 @@
 			dstSubfolderSpec = 1;
 			files = (
 				AFFC83392E59EAD40095EE6D /* battery_tracker in CopyFiles */,
-				AFFC83252E59E0930095EE6D /* pgauge in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,7 +57,6 @@
 
 /* Begin PBXFileReference section */
 		AF9513E52E59D8B900550A10 /* MenuStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MenuStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AF9514142E59D96100550A10 /* pgauge */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = pgauge; sourceTree = BUILT_PRODUCTS_DIR; };
 		AFFC83322E59EA600095EE6D /* battery_tracker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = battery_tracker; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -76,11 +64,6 @@
 		AF9513E72E59D8B900550A10 /* MenuStats */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MenuStats;
-			sourceTree = "<group>";
-		};
-		AF9514152E59D96100550A10 /* pgauge */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = pgauge;
 			sourceTree = "<group>";
 		};
 		AFFC83332E59EA600095EE6D /* battery_tracker */ = {
@@ -99,13 +82,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AF9514112E59D96100550A10 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		AFFC832F2E59EA600095EE6D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -120,7 +96,6 @@
 			isa = PBXGroup;
 			children = (
 				AF9513E72E59D8B900550A10 /* MenuStats */,
-				AF9514152E59D96100550A10 /* pgauge */,
 				AFFC83332E59EA600095EE6D /* battery_tracker */,
 				AF9513E62E59D8B900550A10 /* Products */,
 			);
@@ -130,7 +105,6 @@
 			isa = PBXGroup;
 			children = (
 				AF9513E52E59D8B900550A10 /* MenuStats.app */,
-				AF9514142E59D96100550A10 /* pgauge */,
 				AFFC83322E59EA600095EE6D /* battery_tracker */,
 			);
 			name = Products;
@@ -163,28 +137,6 @@
 				productName = MenuStats;
 				productReference = AF9513E52E59D8B900550A10 /* MenuStats.app */;
 			productType = "com.apple.product-type.application";
-		};
-		AF9514132E59D96100550A10 /* pgauge */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = AF9514182E59D96100550A10 /* Build configuration list for PBXNativeTarget "pgauge" */;
-			buildPhases = (
-				AF9514102E59D96100550A10 /* Sources */,
-				AF9514112E59D96100550A10 /* Frameworks */,
-				AF9514122E59D96100550A10 /* CopyFiles */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				AF9514152E59D96100550A10 /* pgauge */,
-			);
-			name = pgauge;
-			packageProductDependencies = (
-			);
-			productName = pgauge;
-			productReference = AF9514142E59D96100550A10 /* pgauge */;
-			productType = "com.apple.product-type.tool";
 		};
 		AFFC83312E59EA600095EE6D /* battery_tracker */ = {
 			isa = PBXNativeTarget;
@@ -221,9 +173,6 @@
 					AF9513E42E59D8B900550A10 = {
 						CreatedOnToolsVersion = 16.4;
 					};
-					AF9514132E59D96100550A10 = {
-						CreatedOnToolsVersion = 16.4;
-					};
 					AFFC83312E59EA600095EE6D = {
 						CreatedOnToolsVersion = 16.4;
 					};
@@ -247,7 +196,6 @@
 			projectRoot = "";
 			targets = (
 				AF9513E42E59D8B900550A10 /* MenuStats */,
-				AF9514132E59D96100550A10 /* pgauge */,
 				AFFC83312E59EA600095EE6D /* battery_tracker */,
 			);
 		};
@@ -265,13 +213,6 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		AF9513E12E59D8B900550A10 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		AF9514102E59D96100550A10 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -460,30 +401,6 @@
 					};
 				name = Release;
 			};
-		AF9514192E59D96100550A10 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
-				INSTALL_PATH = "";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_NAME = pgauge;
-				SWIFT_TREAT_WARNINGS_AS_ERRORS = NO;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
-		};
-		AF95141A2E59D96100550A10 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
-				INSTALL_PATH = "";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_NAME = pgauge;
-				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Release;
-		};
 		AFFC83372E59EA600095EE6D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -528,15 +445,6 @@
 			buildConfigurations = (
 				AF9514082E59D8B900550A10 /* Debug */,
 				AF9514092E59D8B900550A10 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		AF9514182E59D96100550A10 /* Build configuration list for PBXNativeTarget "pgauge" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AF9514192E59D96100550A10 /* Debug */,
-				AF95141A2E59D96100550A10 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

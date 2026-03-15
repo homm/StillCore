@@ -1,8 +1,5 @@
-import os
 import SwiftUI
 import MacmonSwift
-
-let log = Logger(subsystem: "com.user.MenuStats", category: "stream")
 
 enum AppSettings {
     static let defaultMetricsIntervalMs = 2000
@@ -15,47 +12,28 @@ enum AppSettings {
 }
 
 
-// MARK: - DI: точка доступа к лог-тексту и процессу
+// MARK: - DI
 
 @MainActor
 final class AppDependencies: ObservableObject {
     static let shared = AppDependencies()
 
-    @Published var logHeader: AttributedString = ""
+    @Published var socSummary: String = ""
     @Published var latestMetrics: Metrics?
     @Published var metricsError: String = ""
-    weak var log: LogTextView.Coordinator?
-    private var pendingLines: [String] = []
     private var metricsIntervalMs: Int = AppSettings.savedMetricsIntervalMs
     private var metricsTask: Task<Void, Never>?
-    let streamer = StreamedProcess()
-
-    var streamArgs: [String] = "--samplers cpu_power --format plist -i".components(separatedBy: " ")
 
     private init() {
+        loadSocInfo()
         startMetricsLoopIfNeeded()
     }
 
-    func restartStream(_ interval: Int) {
-        guard let exeDir = Bundle.main.executableURL?.deletingLastPathComponent() else { return }
-        let exe = exeDir.appendingPathComponent("pgauge").path
-
-        let args = streamArgs + [String(interval)]
-        var headerSet = false
-        streamer.start(pGaugeCommand: exe, powerMetricsArgs: args) { [weak self] line in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                if !headerSet {
-                    headerSet = true
-                    self.logHeader = AttributedString(attributedFromANSI(line))
-                } else {
-                    if let coord = self.log {
-                        coord.appendLine(line)
-                    } else {
-                        self.pendingLines.append(line)
-                    }
-                }
-            }
+    private func loadSocInfo() {
+        do {
+            socSummary = formatSocSummary(try Macmon.socInfo())
+        } catch {
+            socSummary = ""
         }
     }
 
@@ -107,12 +85,30 @@ final class AppDependencies: ObservableObject {
         metricsIntervalMs = interval
     }
 
-    func attachLog(_ coord: LogTextView.Coordinator) {
-        self.log = coord
-        pendingLines.forEach { line in
-            coord.appendLine(line)
+    private func formatSocSummary(_ info: SocInfo) -> String {
+        let cpuParts = info.cpuDomains.compactMap { domain -> String? in
+            let name = cpuDomainLabel(for: domain.name)
+            guard !name.isEmpty else { return nil }
+            return "\(domain.units) \(name)"
         }
-        pendingLines.removeAll()
+
+        var parts = [info.chipName]
+        if !cpuParts.isEmpty {
+            parts.append(cpuParts.joined(separator: ", "))
+        }
+        parts.append("\(info.gpuCores) GPU")
+        return parts.joined(separator: " ")
+    }
+
+    private func cpuDomainLabel(for rawName: String) -> String {
+        let lower = rawName.lowercased()
+        if lower.contains("eff") || lower.contains("e-core") || lower == "ecpu" {
+            return "ECPU"
+        }
+        if lower.contains("perf") || lower.contains("p-core") || lower == "pcpu" {
+            return "PCPU"
+        }
+        return rawName.uppercased()
     }
 }
 
@@ -120,7 +116,6 @@ final class AppDependencies: ObservableObject {
 // MARK: - SwiftUI content for the popover/window
 struct ContentView: View {
     @ObservedObject private var dependencies = AppDependencies.shared
-    @State private var capacity: Int = 1000
     @AppStorage(AppSettings.metricsIntervalKey)
     private var interval: Int = AppSettings.defaultMetricsIntervalMs
     @State private var lastBatteryStatus: String = ""
@@ -128,17 +123,8 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Stats tail").font(.headline)
-                Text("last")
-                Stepper("",
-                        value: $capacity,
-                        in: 10...10_000,
-                        step: 10,
-                        onEditingChanged: { _ in
-                            dependencies.log?.setCapacity(capacity)
-                        })
-                    .labelsHidden()
-                Text("\(capacity) lines")
+                Text(dependencies.socSummary.isEmpty ? "MenuStats" : dependencies.socSummary)
+                    .font(.headline)
                 Spacer()
                 Button("⏼") { NSApp.terminate(nil) }
             }
@@ -181,17 +167,6 @@ struct ContentView: View {
                 }
             }
 
-            if !dependencies.logHeader.characters.isEmpty {
-                Text(dependencies.logHeader)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, -8)
-            }
-            LogTextView { coord in
-                dependencies.attachLog(coord)
-                coord.setCapacity(capacity)
-            }
-
             HStack {
                 Text("Interval:")
                 Button("-") {
@@ -207,16 +182,12 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut("=", modifiers: [])
                 Text(intervalLabel)
-                Button("Restart") {
-                    dependencies.restartStream(interval)
-                }
                 Spacer()
-                Button("Clear") { dependencies.log?.clear() }
             }
 
             if !lastBatteryStatus.isEmpty {
                 Divider()
-                Text(sanitizeANSI(lastBatteryStatus))
+                Text(lastBatteryStatus)
                     .textSelection(.enabled)
                     .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(.secondary)
@@ -227,7 +198,6 @@ struct ContentView: View {
         .padding(12)
         .onAppear {
             dependencies.updateMetricsInterval(interval)
-            dependencies.log?.scrollVerticallyToBottom()
             DispatchQueue.global(qos: .utility).async {
                 if let exeDir = Bundle.main.executableURL?.deletingLastPathComponent() {
                     let exe = exeDir.appendingPathComponent("battery_tracker").path
@@ -292,11 +262,6 @@ struct WindowConfigurator: NSViewRepresentable {
 
 @main
 struct MenuStatsApp: App {
-
-    init() {
-        AppDependencies.shared.restartStream(AppSettings.savedMetricsIntervalMs)
-    }
-
     var body: some Scene {
         MenuBarExtra("MenuStats", systemImage: "chart.bar.xaxis") {
             ContentView()
