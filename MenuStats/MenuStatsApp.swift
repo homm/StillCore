@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import MacmonSwift
 
 enum AppSettings {
@@ -21,7 +22,9 @@ final class AppDependencies: ObservableObject {
     @Published var chipName: String?
     @Published var socSummary: String = ""
     @Published var latestMetrics: Metrics?
+    @Published private(set) var metricsHistory: [Metrics] = []
     @Published var metricsError: String = ""
+    fileprivate private(set) var metricsBuffer = MetricsRingBuffer(capacity: 100)
     private var metricsIntervalMs: Int = AppSettings.savedMetricsIntervalMs
     private var metricsTask: Task<Void, Never>?
 
@@ -60,6 +63,8 @@ final class AppDependencies: ObservableObject {
 
                     let metrics = try sampler.metrics()
                     await MainActor.run {
+                        AppDependencies.shared.metricsBuffer.append(metrics)
+                        AppDependencies.shared.metricsHistory = AppDependencies.shared.metricsBuffer.snapshot()
                         AppDependencies.shared.latestMetrics = metrics
                         AppDependencies.shared.metricsError = ""
                     }
@@ -114,6 +119,21 @@ final class AppDependencies: ObservableObject {
 
 // MARK: - SwiftUI content for the popover/window
 struct ContentView: View {
+    private enum PowerSeries: String, CaseIterable {
+        case package = "PKG"
+        case cpu = "CPU"
+        case board = "BOARD"
+        case ane = "ANE"
+        case gpu = "GPU"
+    }
+
+    private struct PowerPoint: Identifiable {
+        let id: String
+        let sample: Int
+        let series: PowerSeries
+        let watts: Double
+    }
+
     @ObservedObject private var dependencies = AppDependencies.shared
     @AppStorage(AppSettings.metricsIntervalKey)
     private var interval: Int = AppSettings.defaultMetricsIntervalMs
@@ -134,8 +154,33 @@ struct ContentView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Power")
-                    .font(.headline)
+                HStack {
+                    Text("Power")
+                        .font(.headline)
+                    Spacer()
+                    Text("WATT")
+                        .font(.system(.callout, design: .monospaced))
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 8)
+
+                if !powerHistory.isEmpty {
+                    Chart(powerHistory) { point in
+                        LineMark(
+                            x: .value("Sample", point.sample),
+                            y: .value("Watts", point.watts),
+                            series: .value("Series", point.series.rawValue)
+                        )
+                            .foregroundStyle(by: .value("Series", point.series.rawValue))
+                            .interpolationMethod(.monotone)
+                            .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    }
+                        .chartForegroundStyleScale(powerColorScale)
+                        .chartXScale(domain: 0...max(dependencies.metricsBuffer.capacity - 1, 0))
+                        .chartYAxis{AxisMarks(position: .leading)}
+                        .chartXAxis(.hidden)
+                }
 
                 if let power = dependencies.latestMetrics?.power {
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
@@ -173,15 +218,15 @@ struct ContentView: View {
                 Button("-") {
                     interval = fasterInterval(from: interval)
                 }
-                .buttonStyle(.plain)
-                .keyboardShortcut("-", modifiers: [])
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("-", modifiers: [])
                 Text("/")
                     .foregroundStyle(.secondary)
                 Button("+") {
                     interval = slowerInterval(from: interval)
                 }
-                .buttonStyle(.plain)
-                .keyboardShortcut("=", modifiers: [])
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("=", modifiers: [])
                 Text(intervalLabel)
                 Spacer()
             }
@@ -209,8 +254,8 @@ struct ContentView: View {
                 }
             }
         }
-        .onChange(of: interval) { newValue in
-            dependencies.updateMetricsInterval(newValue)
+        .onChange(of: interval) {
+            dependencies.updateMetricsInterval(interval)
         }
     }
 
@@ -219,9 +264,8 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .foregroundStyle(.secondary)
-            Text("\(value, specifier: "%.1f") W")
+            Text("\(value.formatted(.number.precision(.fractionLength(0...2)))) W")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var intervalLabel: String {
@@ -230,6 +274,44 @@ struct ContentView: View {
         }
         return String(format: "%.2f s", Double(interval) / 1000.0)
     }
+
+    private var powerHistory: [PowerPoint] {
+        dependencies.metricsHistory.enumerated().flatMap { idx, metrics in
+            [
+                PowerPoint(id: "board-\(idx)", sample: idx, series: .board, watts: Double(metrics.power.board)),
+                PowerPoint(id: "pkg-\(idx)", sample: idx, series: .package, watts: Double(metrics.power.package)),
+                PowerPoint(id: "cpu-\(idx)", sample: idx, series: .cpu, watts: Double(metrics.power.cpu)),
+                PowerPoint(id: "ane-\(idx)", sample: idx, series: .ane, watts: Double(metrics.power.ane)),
+                PowerPoint(id: "gpu-\(idx)", sample: idx, series: .gpu, watts: Double(metrics.power.gpu)),
+            ]
+        }
+    }
+
+    private var powerColorScale: KeyValuePairs<String, Color> {
+        [
+            PowerSeries.board.rawValue: boardColor,
+            PowerSeries.package.rawValue: packageColor,
+            PowerSeries.cpu.rawValue: cpuColor,
+            PowerSeries.ane.rawValue: aneColor,
+            PowerSeries.gpu.rawValue: gpuColor,
+        ]
+    }
+
+    private func color(for series: PowerSeries) -> Color {
+        switch series {
+        case .package: return packageColor
+        case .cpu: return cpuColor
+        case .board: return boardColor
+        case .ane: return aneColor
+        case .gpu: return gpuColor
+        }
+    }
+
+    private let packageColor = Color(red: 0.13, green: 0.48, blue: 0.97)
+    private let cpuColor = Color(red: 0.32, green: 0.74, blue: 0.98)
+    private let boardColor = Color(red: 0.12, green: 0.72, blue: 0.40)
+    private let aneColor = Color(red: 0.98, green: 0.58, blue: 0.02)
+    private let gpuColor = Color(red: 0.98, green: 0.22, blue: 0.44)
 
     private static let minIntervalMs = 100
     private static let snapStepMs = 250
