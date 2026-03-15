@@ -1,5 +1,6 @@
 import os
 import SwiftUI
+import MacmonSwift
 
 let log = Logger(subsystem: "com.user.MenuStats", category: "stream")
 
@@ -11,11 +12,19 @@ final class AppDependencies: ObservableObject {
     static let shared = AppDependencies()
 
     @Published var logHeader: AttributedString = ""
+    @Published var latestMetrics: Metrics?
+    @Published var metricsError: String = ""
     weak var log: LogTextView.Coordinator?
     private var pendingLines: [String] = []
+    private var metricsIntervalMs: Int = 2000
+    private var metricsTask: Task<Void, Never>?
     let streamer = StreamedProcess()
 
     var streamArgs: [String] = "--samplers cpu_power --format plist -i".components(separatedBy: " ")
+
+    private init() {
+        startMetricsLoopIfNeeded()
+    }
 
     func restartStream(_ interval: Int) {
         guard let exeDir = Bundle.main.executableURL?.deletingLastPathComponent() else { return }
@@ -40,9 +49,57 @@ final class AppDependencies: ObservableObject {
         }
     }
 
+    func startMetricsLoopIfNeeded() {
+        guard metricsTask == nil else { return }
+        metricsError = ""
+
+        metricsTask = Task.detached(priority: .utility) {
+            let clock = ContinuousClock()
+            var lastUpdateStarted = clock.now
+
+            do {
+                let sampler = try Sampler()
+                defer { sampler.close() }
+
+                while !Task.isCancelled {
+                    let intervalMs = await MainActor.run { AppDependencies.shared.metricsIntervalMs }
+                    let sampleInterval = Swift.Duration.milliseconds(intervalMs)
+                    let elapsed = lastUpdateStarted.duration(to: clock.now)
+
+                    if elapsed < sampleInterval {
+                        do {
+                            try await Task.sleep(for: sampleInterval - elapsed)
+                        } catch {
+                            break
+                        }
+                    }
+
+                    guard !Task.isCancelled else { break }
+                    lastUpdateStarted = clock.now
+
+                    let metrics = try sampler.metrics()
+                    await MainActor.run {
+                        AppDependencies.shared.latestMetrics = metrics
+                        AppDependencies.shared.metricsError = ""
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    AppDependencies.shared.latestMetrics = nil
+                    AppDependencies.shared.metricsError = "Macmon metrics error: \(error)"
+                    AppDependencies.shared.metricsTask = nil
+                }
+            }
+        }
+    }
+
+    func updateMetricsInterval(_ interval: Int) {
+        metricsIntervalMs = interval
+    }
+
     func attachLog(_ coord: LogTextView.Coordinator) {
         self.log = coord
-        pendingLines.forEach { line in 
+        pendingLines.forEach { line in
             coord.appendLine(line)
         }
         pendingLines.removeAll()
@@ -76,6 +133,43 @@ struct ContentView: View {
             }
             .padding(.bottom, 4)
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Power")
+                    .font(.headline)
+
+                if let power = dependencies.latestMetrics?.power {
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                        GridRow {
+                            powerValue("Package", power.package)
+                            powerValue("CPU", power.cpu)
+                            powerValue("GPU", power.gpu)
+                        }
+                        GridRow {
+                            powerValue("RAM", power.ram)
+                            powerValue("GPU RAM", power.gpuRAM)
+                            powerValue("ANE", power.ane)
+                        }
+                        GridRow {
+                            powerValue("Board", power.board)
+                            powerValue("Battery", power.battery)
+                            powerValue("DC In", power.dcIn)
+                        }
+                    }
+                    .font(.system(.callout, design: .monospaced))
+                } else if !dependencies.metricsError.isEmpty {
+                    Text(dependencies.metricsError)
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                } else {
+                    Text("Waiting for metrics...")
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if !dependencies.logHeader.characters.isEmpty {
                 Text(dependencies.logHeader)
                     .textSelection(.enabled)
@@ -95,7 +189,7 @@ struct ContentView: View {
                         step: 100)
                 .labelsHidden()
                 Text("\(interval) ms")
-                Button("Restart") { 
+                Button("Restart") {
                     dependencies.restartStream(interval)
                 }
                 Spacer()
@@ -125,6 +219,19 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: interval) { newValue in
+            dependencies.updateMetricsInterval(newValue)
+        }
+    }
+
+    @ViewBuilder
+    private func powerValue(_ label: String, _ value: Float) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Text("\(value, specifier: "%.1f") W")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -154,7 +261,7 @@ struct MenuStatsApp: App {
     var body: some Scene {
         MenuBarExtra("MenuStats", systemImage: "chart.bar.xaxis") {
             ContentView()
-                .frame(minWidth: 420, minHeight: 300)
+                .frame(minWidth: 420, minHeight: 600)
                 .background(WindowConfigurator())
         }
         .menuBarExtraStyle(.window)
