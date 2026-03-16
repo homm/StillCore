@@ -31,10 +31,8 @@ final class AppDependencies: ObservableObject {
     @Published var chipName: String?
     @Published var socSummary: String = ""
     @Published var latestMetrics: Metrics?
-    @Published private(set) var metricsHistory: [Metrics] = []
     @Published var metricsError: String = ""
-    var metricsCapacity: Int { metricsBuffer.capacity }
-    fileprivate private(set) var metricsBuffer = MetricsRingBuffer(capacity: 100)
+    fileprivate private(set) var metricsBuffer = MetricsRingBuffer(capacity: 120)
     private var metricsIntervalMs: Int = AppSettings.savedMetricsIntervalMs
     private var metricsTask: Task<Void, Never>?
 
@@ -74,7 +72,6 @@ final class AppDependencies: ObservableObject {
                     let metrics = try sampler.metrics()
                     await MainActor.run {
                         AppDependencies.shared.metricsBuffer.append(metrics)
-                        AppDependencies.shared.metricsHistory = AppDependencies.shared.metricsBuffer.snapshot()
                         AppDependencies.shared.latestMetrics = metrics
                         AppDependencies.shared.metricsError = ""
                     }
@@ -129,20 +126,56 @@ final class AppDependencies: ObservableObject {
 
 // MARK: - SwiftUI content for the popover/window
 struct ContentView: View {
-    private enum PowerSeries: String, CaseIterable {
-        case package = "PKG"
-        case cpu = "CPU"
-        case board = "BOARD"
-        case ane = "ANE"
-        case gpu = "GPU"
+    private struct PowerSeriesDescriptor: Identifiable {
+        let id: String
+        let title: String
+        let color: Color
+        let metricKeyPath: KeyPath<PowerMetrics, Float>
+
+        func watts(from metrics: Metrics) -> Double {
+            Double(metrics.power[keyPath: metricKeyPath])
+        }
     }
 
     private struct PowerPoint: Identifiable {
-        let id: String
+        var id: String { "\(sample)-\(series.id)" }
         let sample: Int
-        let series: PowerSeries
+        let series: PowerSeriesDescriptor
         let watts: Double
     }
+
+    private static let powerSeries: [PowerSeriesDescriptor] = [
+        PowerSeriesDescriptor(
+            id: "board",
+            title: "BOARD",
+            color: Color(red: 0.12, green: 0.72, blue: 0.40),
+            metricKeyPath: \.board
+        ),
+        PowerSeriesDescriptor(
+            id: "package",
+            title: "PKG",
+            color: Color(red: 0.13, green: 0.48, blue: 0.97),
+            metricKeyPath: \.package
+        ),
+        PowerSeriesDescriptor(
+            id: "cpu",
+            title: "CPU",
+            color: Color(red: 0.32, green: 0.74, blue: 0.98),
+            metricKeyPath: \.cpu
+        ),
+        PowerSeriesDescriptor(
+            id: "ane",
+            title: "ANE",
+            color: Color(red: 0.98, green: 0.58, blue: 0.02),
+            metricKeyPath: \.ane
+        ),
+        PowerSeriesDescriptor(
+            id: "gpu",
+            title: "GPU",
+            color: Color(red: 0.98, green: 0.22, blue: 0.44),
+            metricKeyPath: \.gpu
+        ),
+    ]
 
     @ObservedObject private var dependencies = AppDependencies.shared
     @ObservedObject var presentationState: MenuPresentationState
@@ -188,33 +221,37 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if !powerHistory.isEmpty {
+                if dependencies.metricsBuffer.count > 0 {
                     HStack(alignment: .top) {
                         Chart(powerHistory) { point in
                             LineMark(
                                 x: .value("Sample", point.sample),
                                 y: .value("Watts", point.watts),
-                                series: .value("Series", point.series.rawValue)
                             )
-                                .foregroundStyle(by: .value("Series", point.series.rawValue))
+                                .foregroundStyle(by: .value("Series", point.series.title))
                                 .interpolationMethod(.monotone)
                                 .lineStyle(StrokeStyle(lineWidth: 1))
                         }
-                            .chartForegroundStyleScale(powerColorScale)
+                            .chartForegroundStyleScale(
+                                domain: Self.powerSeries.map(\.title),
+                                range: Self.powerSeries.map(\.color)
+                            )
                             .chartLegend(position: .top, alignment: .trailing, spacing: 10)
-                            .chartXScale(domain: 0...max(dependencies.metricsCapacity - 1, 0))
+                            .chartXScale(domain: 0...max(dependencies.metricsBuffer.capacity - 1, 0))
                             .chartYAxis { AxisMarks(position: .leading) }
                             .chartXAxis(.hidden)
                             .frame(maxWidth: .infinity)
                             .padding(.top, -22)
 
-                        VStack(alignment: .leading, spacing: 0) {
-                            Spacer()
-                            ForEach(currentPowerValues, id: \.series.rawValue) { item in
-                                Text(formattedWatts(item.watts))
-                                    .font(.system(.footnote, design: .monospaced))
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(color(for: item.series))
+                        if let metrics = dependencies.latestMetrics {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Spacer()
+                                ForEach(Self.powerSeries) { series in
+                                    Text(formattedWatts(series.watts(from: metrics)))
+                                        .font(.system(.footnote, design: .monospaced))
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(series.color)
+                                }
                             }
                         }
                     }
@@ -299,54 +336,12 @@ struct ContentView: View {
     }
 
     private var powerHistory: [PowerPoint] {
-        dependencies.metricsHistory.enumerated().flatMap { idx, metrics in
-            [
-                PowerPoint(id: "ane-\(idx)", sample: idx, series: .ane, watts: Double(metrics.power.ane)),
-                PowerPoint(id: "gpu-\(idx)", sample: idx, series: .gpu, watts: Double(metrics.power.gpu)),
-                PowerPoint(id: "cpu-\(idx)", sample: idx, series: .cpu, watts: Double(metrics.power.cpu)),
-                PowerPoint(id: "pkg-\(idx)", sample: idx, series: .package, watts: Double(metrics.power.package)),
-                PowerPoint(id: "board-\(idx)", sample: idx, series: .board, watts: Double(metrics.power.board)),
-            ]
+        dependencies.metricsBuffer.snapshot().enumerated().flatMap { idx, metrics in
+            Self.powerSeries.map { series in
+                PowerPoint(sample: idx, series: series, watts: series.watts(from: metrics))
+            }
         }
     }
-
-    private var powerColorScale: KeyValuePairs<String, Color> {
-        [
-            PowerSeries.board.rawValue: boardColor,
-            PowerSeries.package.rawValue: packageColor,
-            PowerSeries.cpu.rawValue: cpuColor,
-            PowerSeries.gpu.rawValue: gpuColor,
-            PowerSeries.ane.rawValue: aneColor,
-        ]
-    }
-
-    private var currentPowerValues: [(series: PowerSeries, watts: Double)] {
-        guard let power = dependencies.latestMetrics?.power else { return [] }
-
-        return [
-            (series: .board, watts: Double(power.board)),
-            (series: .package, watts: Double(power.package)),
-            (series: .cpu, watts: Double(power.cpu)),
-            (series: .ane, watts: Double(power.ane)),
-            (series: .gpu, watts: Double(power.gpu)),
-        ]
-    }
-
-    private func color(for series: PowerSeries) -> Color {
-        switch series {
-        case .package: return packageColor
-        case .cpu: return cpuColor
-        case .board: return boardColor
-        case .ane: return aneColor
-        case .gpu: return gpuColor
-        }
-    }
-
-    private let packageColor = Color(red: 0.13, green: 0.48, blue: 0.97)
-    private let cpuColor = Color(red: 0.32, green: 0.74, blue: 0.98)
-    private let boardColor = Color(red: 0.12, green: 0.72, blue: 0.40)
-    private let aneColor = Color(red: 0.98, green: 0.58, blue: 0.02)
-    private let gpuColor = Color(red: 0.98, green: 0.22, blue: 0.44)
 
     private static let minIntervalMs = 100
     private static let snapStepMs = 250

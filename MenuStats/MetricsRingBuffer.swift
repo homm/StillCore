@@ -4,7 +4,7 @@ struct MetricsRingBuffer {
     let capacity: Int
     private var storage: [Metrics?]
     private var head: Int = 0
-    private var count: Int = 0
+    private(set) var count: Int = 0
 
     init(capacity: Int) {
         precondition(capacity > 0, "MetricsRingBuffer capacity must be greater than zero")
