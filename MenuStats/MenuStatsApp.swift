@@ -51,7 +51,7 @@ final class AppDependencies: ObservableObject {
         guard metricsTask == nil else { return }
         metricsError = ""
 
-        metricsTask = Task.detached(priority: .background) {
+        metricsTask = Task.detached {
             let clock = ContinuousClock()
             var lastUpdateStarted = clock.now
 
@@ -126,8 +126,14 @@ final class AppDependencies: ObservableObject {
 
     private func formatSocSummary(_ info: SocInfo) -> String {
         var parts = info.cpuDomains.compactMap { domain -> String? in
-            let name = normalizedCPUClusterName(domain.name)
-            guard !name.isEmpty else { return nil }
+            var name = domain.name.uppercased()
+            let lower = domain.name.lowercased()
+            if lower == "ecpu" {
+                name = "E"
+            }
+            if lower == "pcpu" {
+                name = "P"
+            }
             return "\(domain.units)\(name)"
         }
         parts.append("\(info.gpuCores)G cores")
@@ -157,7 +163,7 @@ final class AppDependencies: ObservableObject {
             (max(metricsIntervalMs - step, 0) + step - 1) / step * step, Self.minMetricsIntervalMs)
     }
 
-    private static let minMetricsIntervalMs = 1
+    private static let minMetricsIntervalMs = 100
     private static let maxMetricsIntervalMs = 10_000
     private static let intervalStepMs = 250
     private static let largeIntervalStepMs = 1_000
@@ -238,7 +244,7 @@ struct ContentView: View {
                             latestMetrics: dependencies.latestMetrics,
                             xDomain: chartXDomain,
                             valueFormatter: formattedTemperature,
-                            desiredCount: 5,
+                            desiredCount: 4,
                             yScaleDomain: 30...110
                         )
                             .background {

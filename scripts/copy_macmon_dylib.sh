@@ -1,17 +1,7 @@
 #!/bin/sh
 set -eu
 
-MACMON_ROOT="/Users/master/Code/macmon"
-
-case "${CONFIGURATION:-Debug}" in
-  Release)
-    MACMON_LIB_DIR="$MACMON_ROOT/target/release"
-    ;;
-  *)
-    MACMON_LIB_DIR="$MACMON_ROOT/target/debug"
-    ;;
-esac
-
+MACMON_LIB_DIR="../macmon/target/release"
 SOURCE_LIB="$MACMON_LIB_DIR/libmacmon.dylib"
 DEST_DIR="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
 DEST_LIB="$DEST_DIR/libmacmon.dylib"

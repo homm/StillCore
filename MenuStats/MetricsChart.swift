@@ -23,21 +23,9 @@ private enum MetricsChartPalette {
     ]
 }
 
-func normalizedCPUClusterName(_ rawName: String) -> String {
-    let lower = rawName.lowercased()
-    if lower == "ecpu" {
-        return "E"
-    }
-    if lower == "pcpu" {
-        return "P"
-    }
-    return rawName.isEmpty ? "" : rawName.uppercased()
-}
-
 func normalizedGPUClusterName(_ rawName: String) -> String {
     rawName.isEmpty ? "" : rawName.uppercased()
 }
-
 
 struct MetricsSeriesDescriptor: Identifiable {
     let id: String
@@ -149,24 +137,15 @@ enum MetricsChartDefinitions {
     )
     private static func cpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
         metrics.cpu.enumerated().map { index, cluster in
-            let title = frequencyTitle(
-                prefix: "CPU",
-                rawName: cluster.name,
-                fallbackIndex: index,
-                normalizedName: normalizedCPUClusterName
-            )
-
             return MetricsSeriesDescriptor(
                 id: "cpu-frequency-\(index)",
-                title: title,
+                title: cluster.name,
                 color: MetricsChartPalette.cpuFrequencyPalette[
                     index % MetricsChartPalette.cpuFrequencyPalette.count],
                 value: { metrics in
-                    guard metrics.cpu.indices.contains(index) else { return 0 }
                     return Double(metrics.cpu[index].frequencyMHz) / 1000
                 },
                 usageValue: { metrics in
-                    guard metrics.cpu.indices.contains(index) else { return 0 }
                     return Double(metrics.cpu[index].usage)
                 }
             )
@@ -175,24 +154,15 @@ enum MetricsChartDefinitions {
 
     private static func gpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
         metrics.gpu.enumerated().map { index, cluster in
-            let title = frequencyTitle(
-                prefix: "GPU",
-                rawName: cluster.name,
-                fallbackIndex: index,
-                normalizedName: normalizedGPUClusterName
-            )
-
             return MetricsSeriesDescriptor(
                 id: "gpu-frequency-\(index)",
-                title: title,
+                title: cluster.name,
                 color: MetricsChartPalette.gpuFrequencyPalette[
                     index % MetricsChartPalette.gpuFrequencyPalette.count],
                 value: { metrics in
-                    guard metrics.gpu.indices.contains(index) else { return 0 }
                     return Double(metrics.gpu[index].frequencyMHz) / 1000
                 },
                 usageValue: { metrics in
-                    guard metrics.gpu.indices.contains(index) else { return 0 }
                     return Double(metrics.gpu[index].usage)
                 }
             )
