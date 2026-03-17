@@ -46,21 +46,25 @@ struct MetricsSample: Identifiable {
 struct MetricsChartDefinition {
     let title: String
     let unitLabel: String
+    let helpMarkdown: String?
     private let seriesBuilder: (Metrics?) -> [MetricsSeriesDescriptor]
 
-    init(title: String, unitLabel: String, series: [MetricsSeriesDescriptor]) {
+    init(title: String, unitLabel: String, helpMarkdown: String? = nil, series: [MetricsSeriesDescriptor]) {
         self.title = title
         self.unitLabel = unitLabel
+        self.helpMarkdown = helpMarkdown
         self.seriesBuilder = { _ in series }
     }
 
     init(
         title: String,
         unitLabel: String,
+        helpMarkdown: String? = nil,
         seriesBuilder: @escaping (Metrics?) -> [MetricsSeriesDescriptor]
     ) {
         self.title = title
         self.unitLabel = unitLabel
+        self.helpMarkdown = helpMarkdown
         self.seriesBuilder = seriesBuilder
     }
 
@@ -74,16 +78,24 @@ enum MetricsChartDefinitions {
     static let power = MetricsChartDefinition(
         title: "Power",
         unitLabel: "WATT",
+        helpMarkdown:
+"""
+**Power draw by components**
+
+• `SYS` is the total system power draw.
+• `CHIP` is the power reported for the whole SoC, including all compute units and memory.
+• `CPU`, `GPU`, and `ANE` are individual parts of `CHIP`.
+""",
         series: [
             MetricsSeriesDescriptor(
-                id: "board",
-                title: "BOARD",
+                id: "sys",
+                title: "SYS",
                 color: MetricsChartPalette.board,
                 value: { Double($0.power.board) }
             ),
             MetricsSeriesDescriptor(
-                id: "package",
-                title: "PKG",
+                id: "chip",
+                title: "CHIP",
                 color: MetricsChartPalette.package,
                 value: { Double($0.power.package) }
             ),
@@ -111,6 +123,16 @@ enum MetricsChartDefinitions {
     static let frequency = MetricsChartDefinition(
         title: "Frequency, usage",
         unitLabel: "GHz",
+        helpMarkdown:
+"""
+Current frequency and usage of all CPU and GPU clusters.
+
+**How to read this mess**
+Each cluster is shown with a solid line for frequency \
+and a semi-transparent area underneath for current usage. \
+The area shows the fraction of that frequency that is being used. \
+When usage is at 100%, the area reaches the line.
+""",
         seriesBuilder: { metrics in
             guard let metrics else { return [] }
             return cpuFrequencySeries(from: metrics) + gpuFrequencySeries(from: metrics)
@@ -194,7 +216,6 @@ private extension View {
     }
 }
 
-
 struct MetricsChartSection: View {
     let definition: MetricsChartDefinition
     let samples: [MetricsSample]
@@ -205,6 +226,7 @@ struct MetricsChartSection: View {
     var desiredCount = 7
     var lineWidth = 1.0
     var yScaleDomain: ClosedRange<Double>? = nil
+    @State private var isHelpPresented = false
 
     private var resolvedSeries: [MetricsSeriesDescriptor] {
         definition.resolvedSeries(from: latestMetrics ?? samples.last?.metrics)
@@ -301,13 +323,55 @@ struct MetricsChartSection: View {
 
     private func headerView() -> some View {
         HStack(alignment: .bottom) {
-            Text(definition.title)
-                .font(.headline)
+            HStack(alignment: .center, spacing: 4) {
+                Text(definition.title)
+                    .font(.headline)
+                if let helpMarkdown = definition.helpMarkdown {
+                    Button {
+                        isHelpPresented.toggle()
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $isHelpPresented, arrowEdge: .bottom) {
+                        ChartHelpPopover(markdown: helpMarkdown)
+                    }
+                }
+            }
             Spacer()
             Text(definition.unitLabel)
                 .font(.system(.callout, design: .monospaced))
                 .fontWeight(.bold)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct ChartHelpPopover: View {
+    let markdown: String
+
+    private var attributedMarkdown: AttributedString {
+        do {
+            return try AttributedString(
+                markdown: markdown,
+                options: AttributedString.MarkdownParsingOptions(
+                    interpretedSyntax: .inlineOnlyPreservingWhitespace
+                )
+            )
+        } catch {
+            return AttributedString(markdown)
+        }
+    }
+
+    var body: some View {
+        Text(attributedMarkdown)
+            .font(.system(.callout))
+            .multilineTextAlignment(.leading)
+            .textSelection(.enabled)
+            .frame(width: 260, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(12)
     }
 }
