@@ -19,11 +19,31 @@ enum AppSettings {
 }
 
 enum AppPresentation {
-    static let windowMinSize = CGSize(width: 420, height: 460)
+    static let windowMinSize = CGSize(width: 420, height: 560)
     static let statusItemSystemImageName = "chart.bar.xaxis"
     static let statusItemFallbackTitle = "MS"
     static let statusItemToolTip = "MenuStats"
     static let pinnedWindowTitle = "MenuStats"
+}
+
+private enum MetricsChartPalette {
+    static let board = Color(red: 0.12, green: 0.8, blue: 0.2)
+    static let package = Color(red: 0.13, green: 0.48, blue: 0.97)
+    static let cpu = Color(red: 0.32, green: 0.74, blue: 0.98)
+    static let gpu = Color(red: 1, green: 0.22, blue: 0.02)
+    static let ane = Color(red: 0.98, green: 0.58, blue: 0.02)
+
+    static let cpuFrequencyPalette: [Color] = [
+        board, package, cpu,
+        Color(red: 0.18, green: 0.60, blue: 0.84),
+        Color(red: 0.10, green: 0.42, blue: 0.70),
+    ]
+
+    static let gpuFrequencyPalette: [Color] = [
+        gpu, ane,
+        Color(red: 0.92, green: 0.36, blue: 0.18),
+        Color(red: 0.86, green: 0.14, blue: 0.34),
+    ]
 }
 
 private struct MetricsSeriesDescriptor: Identifiable {
@@ -31,9 +51,28 @@ private struct MetricsSeriesDescriptor: Identifiable {
     let title: String
     let color: Color
     let value: (Metrics) -> Double
+    let fillValue: ((Metrics) -> Double)?
+
+    init(
+        id: String,
+        title: String,
+        color: Color,
+        value: @escaping (Metrics) -> Double,
+        fillValue: ((Metrics) -> Double)? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.color = color
+        self.value = value
+        self.fillValue = fillValue
+    }
 
     func value(from metrics: Metrics) -> Double {
         value(metrics)
+    }
+
+    func fillValue(from metrics: Metrics) -> Double? {
+        fillValue?(metrics)
     }
 }
 
@@ -46,9 +85,38 @@ private struct MetricsSample: Identifiable {
 
 @MainActor
 private struct MetricsChartDefinition {
+    enum RenderingMode {
+        case lineOnly
+        case lineWithFill
+    }
+
     let title: String
     let unitLabel: String
-    let series: [MetricsSeriesDescriptor]
+    let renderingMode: RenderingMode
+    private let seriesBuilder: (Metrics?) -> [MetricsSeriesDescriptor]
+
+    init(title: String, unitLabel: String, renderingMode: RenderingMode = .lineOnly, series: [MetricsSeriesDescriptor]) {
+        self.title = title
+        self.unitLabel = unitLabel
+        self.renderingMode = renderingMode
+        self.seriesBuilder = { _ in series }
+    }
+
+    init(
+        title: String,
+        unitLabel: String,
+        renderingMode: RenderingMode = .lineOnly,
+        seriesBuilder: @escaping (Metrics?) -> [MetricsSeriesDescriptor]
+    ) {
+        self.title = title
+        self.unitLabel = unitLabel
+        self.renderingMode = renderingMode
+        self.seriesBuilder = seriesBuilder
+    }
+
+    func resolvedSeries(from metrics: Metrics?) -> [MetricsSeriesDescriptor] {
+        seriesBuilder(metrics)
+    }
 }
 
 @MainActor
@@ -60,34 +128,44 @@ private enum MetricsChartDefinitions {
             MetricsSeriesDescriptor(
             id: "board",
             title: "BOARD",
-            color: Color(red: 0.12, green: 0.72, blue: 0.40),
+            color: MetricsChartPalette.board,
             value: { Double($0.power.board) }
         ),
             MetricsSeriesDescriptor(
             id: "package",
             title: "PKG",
-            color: Color(red: 0.13, green: 0.48, blue: 0.97),
+            color: MetricsChartPalette.package,
             value: { Double($0.power.package) }
         ),
             MetricsSeriesDescriptor(
             id: "cpu",
             title: "CPU",
-            color: Color(red: 0.32, green: 0.74, blue: 0.98),
+            color: MetricsChartPalette.cpu,
             value: { Double($0.power.cpu) }
         ),
             MetricsSeriesDescriptor(
             id: "ane",
             title: "ANE",
-            color: Color(red: 0.98, green: 0.58, blue: 0.02),
+            color: MetricsChartPalette.ane,
             value: { Double($0.power.ane) }
         ),
             MetricsSeriesDescriptor(
             id: "gpu",
             title: "GPU",
-            color: Color(red: 0.98, green: 0.22, blue: 0.44),
+            color: MetricsChartPalette.gpu,
             value: { Double($0.power.gpu) }
         ),
         ]
+    )
+
+    static let frequency = MetricsChartDefinition(
+        title: "Frequency, usage",
+        unitLabel: "GHz",
+        renderingMode: .lineWithFill,
+        seriesBuilder: { metrics in
+            guard let metrics else { return [] }
+            return cpuFrequencySeries(from: metrics) + gpuFrequencySeries(from: metrics)
+        }
     )
 
     static let temperature = MetricsChartDefinition(
@@ -97,17 +175,107 @@ private enum MetricsChartDefinitions {
             MetricsSeriesDescriptor(
                 id: "cpu-average",
                 title: "CPU AVG",
-                color: Color(red: 0.98, green: 0.42, blue: 0.16),
+                color: MetricsChartPalette.cpu,
                 value: { Double($0.temperature.cpuAverage) }
             ),
             MetricsSeriesDescriptor(
                 id: "gpu-average",
                 title: "GPU AVG",
-                color: Color(red: 0.85, green: 0.20, blue: 0.48),
+                color: MetricsChartPalette.gpu,
                 value: { Double($0.temperature.gpuAverage) }
             ),
         ]
     )
+    private static func cpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
+        metrics.cpu.enumerated().map { index, cluster in
+            let title = frequencyTitle(
+                prefix: "CPU",
+                rawName: cluster.name,
+                fallbackIndex: index,
+                normalizedName: normalizedCPUClusterName
+            )
+
+            return MetricsSeriesDescriptor(
+                id: "cpu-frequency-\(index)",
+                title: title,
+                color: MetricsChartPalette.cpuFrequencyPalette[index % MetricsChartPalette.cpuFrequencyPalette.count],
+                value: { metrics in
+                    guard metrics.cpu.indices.contains(index) else { return 0 }
+                    return Double(metrics.cpu[index].frequencyMHz) / 1000
+                },
+                fillValue: { metrics in
+                    guard metrics.cpu.indices.contains(index) else { return 0 }
+                    let cluster = metrics.cpu[index]
+                    return Double(cluster.frequencyMHz) / 1000 * Double(cluster.usage)
+                }
+            )
+        }
+    }
+
+    private static func gpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
+        metrics.gpu.enumerated().map { index, cluster in
+            let title = frequencyTitle(
+                prefix: "GPU",
+                rawName: cluster.name,
+                fallbackIndex: index,
+                normalizedName: normalizedGPUClusterName
+            )
+
+            return MetricsSeriesDescriptor(
+                id: "gpu-frequency-\(index)",
+                title: title,
+                color: MetricsChartPalette.gpuFrequencyPalette[index % MetricsChartPalette.gpuFrequencyPalette.count],
+                value: { metrics in
+                    guard metrics.gpu.indices.contains(index) else { return 0 }
+                    return Double(metrics.gpu[index].frequencyMHz) / 1000
+                },
+                fillValue: { metrics in
+                    guard metrics.gpu.indices.contains(index) else { return 0 }
+                    let cluster = metrics.gpu[index]
+                    return Double(cluster.frequencyMHz) / 1000 * Double(cluster.usage)
+                }
+            )
+        }
+    }
+
+    private static func frequencyTitle(
+        prefix: String,
+        rawName: String,
+        fallbackIndex: Int,
+        normalizedName: (String) -> String
+    ) -> String {
+        let normalized = normalizedName(rawName)
+        if normalized.isEmpty {
+            return "\(prefix) \(fallbackIndex + 1)"
+        }
+        return "\(prefix) \(normalized)"
+    }
+}
+
+private func normalizedCPUClusterName(_ rawName: String) -> String {
+    let lower = rawName.lowercased()
+    if lower == "ecpu" {
+        return "E"
+    }
+    if lower == "pcpu" {
+        return "P"
+    }
+    return rawName.isEmpty ? "" : rawName.uppercased()
+}
+
+private func normalizedGPUClusterName(_ rawName: String) -> String {
+    rawName.isEmpty ? "" : rawName.uppercased()
+}
+
+private extension View {
+    @ViewBuilder
+    func chartYScaleIfPresent(_ domain: ClosedRange<Double>?) -> some View {
+        if let domain {
+            self.chartYScale(domain: domain)
+        } else {
+            self
+        }
+    }
 }
 
 
@@ -181,6 +349,7 @@ final class AppDependencies: ObservableObject {
         }
     }
 
+
     func setContentVisible(_ isVisible: Bool) {
         guard isContentVisible != isVisible else { return }
         isContentVisible = isVisible
@@ -210,23 +379,12 @@ final class AppDependencies: ObservableObject {
 
     private func formatSocSummary(_ info: SocInfo) -> String {
         var parts = info.cpuDomains.compactMap { domain -> String? in
-            let name = cpuDomainLabel(for: domain.name)
+            let name = normalizedCPUClusterName(domain.name)
             guard !name.isEmpty else { return nil }
             return "\(domain.units)\(name)"
         }
         parts.append("\(info.gpuCores)G cores")
         return parts.joined(separator: " ")
-    }
-
-    private func cpuDomainLabel(for rawName: String) -> String {
-        let lower = rawName.lowercased()
-        if lower == "ecpu" {
-            return "E"
-        }
-        if lower == "pcpu" {
-            return "P"
-        }
-        return rawName;
     }
 
     @Published var metricsIntervalMs: Int = AppSettings.metricsIntervalMs {
@@ -265,8 +423,13 @@ private struct MetricsChartSection: View {
     let latestMetrics: Metrics?
     let xDomain: ClosedRange<Int>
     let valueFormatter: (Double) -> String
+    var desiredCount = 7
+    var lineWidth = 1.0
+    var yScaleDomain: ClosedRange<Double>? = nil
 
     var body: some View {
+        let resolvedSeries = definition.resolvedSeries(from: latestMetrics ?? samples.last?.metrics)
+
         HStack(alignment: .top, spacing: 0) {
             if samples.isEmpty {
                 VStack(alignment: .leading) {
@@ -279,26 +442,45 @@ private struct MetricsChartSection: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Chart {
-                    ForEach(samples) { sample in
-                        ForEach(definition.series.reversed()) { series in
+                    if definition.renderingMode == .lineWithFill {
+                        ForEach(resolvedSeries) { series in
+                            ForEach(samples, id: \.id) { sample in
+                                if let fillValue = series.fillValue(from: sample.metrics) {
+                                    AreaMark(
+                                        x: .value("Sample", sample.sampleID),
+                                        yStart: .value("Usage Base", 0),
+                                        yEnd: .value("Usage", fillValue),
+                                        series: .value("Series", series.title)
+                                    )
+                                    .foregroundStyle(by: .value("Series", series.title))
+                                    .opacity(0.5)
+                                    .interpolationMethod(.linear)
+                                }
+                            }
+                        }
+                    }
+
+                    ForEach(resolvedSeries.reversed()) { series in
+                        ForEach(samples, id: \.id) { sample in
                             LineMark(
                                 x: .value("Sample", sample.sampleID),
                                 y: .value("Value", series.value(from: sample.metrics)),
                             )
-                                .foregroundStyle(by: .value("Series", series.title))
-                                .interpolationMethod(.monotone)
-                                .lineStyle(StrokeStyle(lineWidth: 0.75))
+                            .foregroundStyle(by: .value("Series", series.title))
+                            .interpolationMethod(.monotone)
+                            .lineStyle(StrokeStyle(lineWidth: lineWidth))
                         }
                     }
                 }
                     .chartForegroundStyleScale(
-                        domain: definition.series.map(\.title),
-                        range: definition.series.map(\.color)
+                        domain: resolvedSeries.map(\.title),
+                        range: resolvedSeries.map(\.color)
                     )
                     .chartLegend(position: .top, alignment: .trailing, spacing: 10)
                     .chartXScale(domain: xDomain)
+                    .chartYScaleIfPresent(yScaleDomain)
                     .chartYAxis {
-                        AxisMarks(position: .leading, values: .automatic(desiredCount: 7)) {value in
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: desiredCount)) {value in
                             AxisGridLine(
                                 stroke: value.as(Double.self) == 0
                                     ? StrokeStyle(lineWidth: 1)
@@ -312,7 +494,7 @@ private struct MetricsChartSection: View {
                 if let latestMetrics {
                     VStack(alignment: .leading, spacing: 0) {
                         Spacer()
-                        ForEach(definition.series) { series in
+                        ForEach(resolvedSeries) { series in
                             Text(valueFormatter(series.value(from: latestMetrics)))
                                 .font(.system(.footnote, design: .monospaced))
                                 .fontWeight(.bold)
@@ -373,8 +555,9 @@ struct ContentView: View {
                 .background(Color(nsColor: .textColor))
 
             VStack(spacing: 8) {
+                let graphPadding: CGFloat = 8
                 GeometryReader { metrics in
-                    VStack(spacing: 18) {
+                    VStack(spacing: graphPadding * 2 + 2) {
                         MetricsChartSection(
                             definition: MetricsChartDefinitions.power,
                             samples: chartSamples,
@@ -382,27 +565,41 @@ struct ContentView: View {
                             xDomain: chartXDomain,
                             valueFormatter: formattedWatts
                         )
-                            .frame(height: metrics.size.height * 0.55)
+                            .frame(height: metrics.size.height * 0.35)
                             .background {
                                 Color(.textBackgroundColor)
                                 .padding(.horizontal, -12)
-                                .padding(.vertical, -8)
+                                .padding(.vertical, -graphPadding)
                             }
-                        // Divider()
+
+                        MetricsChartSection(
+                            definition: MetricsChartDefinitions.frequency,
+                            samples: chartSamples,
+                            latestMetrics: dependencies.latestMetrics,
+                            xDomain: chartXDomain,
+                            valueFormatter: formattedFrequencyMHz
+                        )
+                            .frame(height: metrics.size.height * 0.35)
+                            .background {
+                                Color(.textBackgroundColor)
+                                .padding(.horizontal, -12)
+                                .padding(.vertical, -graphPadding)
+                            }
 
                         MetricsChartSection(
                             definition: MetricsChartDefinitions.temperature,
                             samples: chartSamples,
                             latestMetrics: dependencies.latestMetrics,
                             xDomain: chartXDomain,
-                            valueFormatter: formattedTemperature
+                            valueFormatter: formattedTemperature,
+                            desiredCount: 5,
+                            yScaleDomain: 30...110
                         )
                             .background {
                                 Color(.textBackgroundColor)
                                 .padding(.horizontal, -12)
-                                .padding(.vertical, -8)
+                                .padding(.vertical, -graphPadding)
                             }
-                        // Divider()
                     }
                 }
 
@@ -470,6 +667,10 @@ struct ContentView: View {
 
     private func formattedTemperature(_ value: Double) -> String {
         String(format: "%5.1f ", locale: Locale(identifier: "en_US_POSIX"), value)
+    }
+
+    private func formattedFrequencyMHz(_ value: Double) -> String {
+        String(format: "%6.2f", locale: Locale(identifier: "en_US_POSIX"), value)
     }
 
     private var intervalLabel: String {
