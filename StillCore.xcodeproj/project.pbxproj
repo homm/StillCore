@@ -57,14 +57,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXFileReference section */
-		AF9513E52E59D8B900550A10 /* MenuStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MenuStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF9513E52E59D8B900550A10 /* StillCore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StillCore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AFFC83322E59EA600095EE6D /* battery_tracker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = battery_tracker; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AF9513E72E59D8B900550A10 /* MenuStats */ = {
+		AF9513E72E59D8B900550A10 /* StillCore */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = MenuStats;
+			path = StillCore;
 			sourceTree = "<group>";
 		};
 		AFFC83332E59EA600095EE6D /* battery_tracker */ = {
@@ -97,7 +97,7 @@
 		AF9513DC2E59D8B900550A10 = {
 			isa = PBXGroup;
 			children = (
-				AF9513E72E59D8B900550A10 /* MenuStats */,
+				AF9513E72E59D8B900550A10 /* StillCore */,
 				AFFC83332E59EA600095EE6D /* battery_tracker */,
 				AF9513E62E59D8B900550A10 /* Products */,
 			);
@@ -106,7 +106,7 @@
 		AF9513E62E59D8B900550A10 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				AF9513E52E59D8B900550A10 /* MenuStats.app */,
+				AF9513E52E59D8B900550A10 /* StillCore.app */,
 				AFFC83322E59EA600095EE6D /* battery_tracker */,
 			);
 			name = Products;
@@ -115,9 +115,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AF9513E42E59D8B900550A10 /* MenuStats */ = {
+		AF9513E42E59D8B900550A10 /* StillCore */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = AF9514072E59D8B900550A10 /* Build configuration list for PBXNativeTarget "MenuStats" */;
+			buildConfigurationList = AF9514072E59D8B900550A10 /* Build configuration list for PBXNativeTarget "StillCore" */;
 				buildPhases = (
 					AF9513E12E59D8B900550A10 /* Sources */,
 					AF9513E22E59D8B900550A10 /* Frameworks */,
@@ -130,15 +130,15 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				AF9513E72E59D8B900550A10 /* MenuStats */,
+				AF9513E72E59D8B900550A10 /* StillCore */,
 			);
-				name = MenuStats;
+				name = StillCore;
 				packageProductDependencies = (
 					B0A000062E5A000100000001 /* DGCharts */,
 					B0A000032E5A000100000001 /* MacmonSwift */,
 				);
-				productName = MenuStats;
-				productReference = AF9513E52E59D8B900550A10 /* MenuStats.app */;
+				productName = StillCore;
+				productReference = AF9513E52E59D8B900550A10 /* StillCore.app */;
 			productType = "com.apple.product-type.application";
 		};
 		AFFC83312E59EA600095EE6D /* battery_tracker */ = {
@@ -181,7 +181,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AF9513E02E59D8B900550A10 /* Build configuration list for PBXProject "MenuStats" */;
+			buildConfigurationList = AF9513E02E59D8B900550A10 /* Build configuration list for PBXProject "StillCore" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -199,7 +199,7 @@
 				projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				AF9513E42E59D8B900550A10 /* MenuStats */,
+				AF9513E42E59D8B900550A10 /* StillCore */,
 				AFFC83312E59EA600095EE6D /* battery_tracker */,
 			);
 		};
@@ -356,7 +356,7 @@
 				buildSettings = {
 					ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 					ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-					CODE_SIGN_ENTITLEMENTS = MenuStats/MenuStats.entitlements;
+					CODE_SIGN_ENTITLEMENTS = StillCore/StillCore.entitlements;
 					"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 						CODE_SIGN_STYLE = Automatic;
 						CURRENT_PROJECT_VERSION = 1;
@@ -370,7 +370,7 @@
 						);
 						MACOSX_DEPLOYMENT_TARGET = 14.0;
 						MARKETING_VERSION = 1.0;
-						PRODUCT_BUNDLE_IDENTIFIER = com.example.MenuStats;
+						PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore;
 						PRODUCT_NAME = "$(TARGET_NAME)";
 						REGISTER_APP_GROUPS = YES;
 						SWIFT_EMIT_LOC_STRINGS = YES;
@@ -383,7 +383,7 @@
 				buildSettings = {
 					ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 					ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-					CODE_SIGN_ENTITLEMENTS = MenuStats/MenuStats.entitlements;
+					CODE_SIGN_ENTITLEMENTS = StillCore/StillCore.entitlements;
 					"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 						CODE_SIGN_STYLE = Automatic;
 						CURRENT_PROJECT_VERSION = 1;
@@ -397,7 +397,7 @@
 						);
 						MACOSX_DEPLOYMENT_TARGET = 14.0;
 						MARKETING_VERSION = 1.0;
-						PRODUCT_BUNDLE_IDENTIFIER = com.example.MenuStats;
+						PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore;
 						PRODUCT_NAME = "$(TARGET_NAME)";
 						REGISTER_APP_GROUPS = YES;
 						SWIFT_EMIT_LOC_STRINGS = YES;
@@ -446,7 +446,7 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCConfigurationList section */
-		AF9513E02E59D8B900550A10 /* Build configuration list for PBXProject "MenuStats" */ = {
+		AF9513E02E59D8B900550A10 /* Build configuration list for PBXProject "StillCore" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AF9514052E59D8B900550A10 /* Debug */,
@@ -455,7 +455,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AF9514072E59D8B900550A10 /* Build configuration list for PBXNativeTarget "MenuStats" */ = {
+		AF9514072E59D8B900550A10 /* Build configuration list for PBXNativeTarget "StillCore" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AF9514082E59D8B900550A10 /* Debug */,

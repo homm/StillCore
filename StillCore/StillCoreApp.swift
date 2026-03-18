@@ -21,8 +21,8 @@ enum AppPresentation {
     static let windowMinSize = CGSize(width: 420, height: 560)
     static let statusItemSystemImageName = "chart.bar.xaxis"
     static let statusItemFallbackTitle = "MS"
-    static let statusItemToolTip = "MenuStats"
-    static let pinnedWindowTitle = "MenuStats"
+    static let statusItemToolTip = "StillCore"
+    static let pinnedWindowTitle = "StillCore"
 }
 
 // MARK: - DI
@@ -180,7 +180,7 @@ struct ContentView: View {
 
         VStack(spacing: 8) {
             HStack {
-                Text(dependencies.chipName ?? "MenuStats")
+                Text(dependencies.chipName ?? AppPresentation.pinnedWindowTitle)
                     .font(.headline)
                 Text(dependencies.socSummary)
                     .foregroundStyle(.secondary)
@@ -375,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct MenuStatsApp: App {
+struct MainApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

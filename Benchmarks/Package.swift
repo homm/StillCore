@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "MenuStatsBenchmarks",
+    name: "Benchmarks",
     platforms: [
         .macOS(.v14),
     ],
@@ -12,10 +12,11 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "MenuStatsBenchmarks",
+            name: "Benchmarks",
             dependencies: [
                 .product(name: "Benchmark", package: "swift-benchmark"),
-            ]
+            ],
+            path: "Sources"
         ),
     ]
 )

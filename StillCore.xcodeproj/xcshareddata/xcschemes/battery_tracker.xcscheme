@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "AF9513E42E59D8B900550A10"
-               BuildableName = "MenuStats.app"
-               BlueprintName = "MenuStats"
-               ReferencedContainer = "container:MenuStats.xcodeproj">
+               BlueprintIdentifier = "AFFC83312E59EA600095EE6D"
+               BuildableName = "battery_tracker"
+               BlueprintName = "battery_tracker"
+               ReferencedContainer = "container:StillCore.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -29,30 +29,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
-      <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "AF9513F22E59D8B900550A10"
-               BuildableName = "MenuStatsTests.xctest"
-               BlueprintName = "MenuStatsTests"
-               ReferencedContainer = "container:MenuStats.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "AF9513FC2E59D8B900550A10"
-               BuildableName = "MenuStatsUITests.xctest"
-               BlueprintName = "MenuStatsUITests"
-               ReferencedContainer = "container:MenuStats.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -63,32 +39,39 @@
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      allowLocationSimulation = "YES">
+      allowLocationSimulation = "YES"
+      viewDebuggingEnabled = "No">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "AF9513E42E59D8B900550A10"
-            BuildableName = "MenuStats.app"
-            BlueprintName = "MenuStats"
-            ReferencedContainer = "container:MenuStats.xcodeproj">
+            BlueprintIdentifier = "AFFC83312E59EA600095EE6D"
+            BuildableName = "battery_tracker"
+            BlueprintName = "battery_tracker"
+            ReferencedContainer = "container:StillCore.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+         <CommandLineArgument
+            argument = "watch"
+            isEnabled = "YES">
+         </CommandLineArgument>
+      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      savedToolIdentifier = "Leaks"
+      savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "AF9513E42E59D8B900550A10"
-            BuildableName = "MenuStats.app"
-            BlueprintName = "MenuStats"
-            ReferencedContainer = "container:MenuStats.xcodeproj">
+            BlueprintIdentifier = "AFFC83312E59EA600095EE6D"
+            BuildableName = "battery_tracker"
+            BlueprintName = "battery_tracker"
+            ReferencedContainer = "container:StillCore.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
