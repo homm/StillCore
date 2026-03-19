@@ -14,4 +14,4 @@ fi
 mkdir -p "$DEST_DIR"
 cp -f "$SOURCE_LIB" "$DEST_LIB"
 
-codesign --force --sign - --timestamp=none --preserve-metadata=identifier,entitlements,flags "$DEST_LIB"
+codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$DEST_LIB"
