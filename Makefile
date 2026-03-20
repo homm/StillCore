@@ -71,3 +71,4 @@ battery-watch: battery
 
 clean:
 	rm -rf "$(DERIVED_DATA)"
+	rm -rf "./Benchmarks/.build"

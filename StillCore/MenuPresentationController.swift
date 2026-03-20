@@ -91,13 +91,15 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
     func setPresentationMode(_ mode: PresentationMode) {
         switch mode {
         case .attached:
+            // Window mode change should be on off-screen window
+            managedWindow.orderOut(nil)
             hostingView.safeAreaRegions = []
             managedWindow.styleMask = [.titled, .fullSizeContentView, .closable, .resizable]
             managedWindow.titleVisibility = .hidden
             managedWindow.titlebarAppearsTransparent = true
             managedWindow.isMovableByWindowBackground = false
             managedWindow.level = .statusBar
-            managedWindow.collectionBehavior = [.moveToActiveSpace, .transient]
+            managedWindow.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
             managedWindow.standardWindowButton(.closeButton)?.isHidden = true
             managedWindow.standardWindowButton(.miniaturizeButton)?.isHidden = true
             managedWindow.standardWindowButton(.zoomButton)?.isHidden = true
@@ -109,7 +111,7 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
             managedWindow.titlebarAppearsTransparent = false
             managedWindow.isMovableByWindowBackground = false
             managedWindow.level = .normal
-            managedWindow.collectionBehavior = [.moveToActiveSpace]
+            managedWindow.collectionBehavior = [.moveToActiveSpace, .fullScreenNone]
             managedWindow.standardWindowButton(.closeButton)?.isHidden = false
             managedWindow.standardWindowButton(.miniaturizeButton)?.isHidden = false
             managedWindow.standardWindowButton(.zoomButton)?.isHidden = false
@@ -122,9 +124,8 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
             repositionAttachedWindow()
         }
         managedWindow.makeKeyAndOrderFront(nil)
-        managedWindow.orderFrontRegardless()
         presentationState.setWindowVisible(true)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         syncActivationPolicy()
     }
 
