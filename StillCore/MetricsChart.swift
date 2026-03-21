@@ -38,16 +38,22 @@ private struct MaterializedMetricsSample {
     }
 
     let sampleID: Int
-    let schemaVersion: Int
     let values: [SeriesValue]
 }
 
+private struct MaterializedChartPoint {
+    let descriptorIndex: Int
+    let detailsValue: Double
+}
+
 @MainActor
-final class MetricsChartController {
+final class ChartDataController {
     private(set) var data: LineChartData?
+    private(set) var series: [MetricsSeriesDescriptor] = []
     private(set) var rightBoundary: Int = 0
 
-    private var lastAppliedSchemaVersion: Int?
+    private var schema: AnyHashable?
+    private var appendedCount = 0
     private var dataSets: [LineChartDataSet] = []
     private var seriesKinds: [MetricsSeriesDescriptor.Kind] = []
 
@@ -57,21 +63,35 @@ final class MetricsChartController {
 
     @discardableResult
     fileprivate func append(
-        sample: MaterializedMetricsSample,
-        series: [MetricsSeriesDescriptor],
+        metrics: Metrics,
+        definition: MetricsChartDefinition,
         capacity: Int
     ) -> UpdateResult {
-        let schemaChanged = lastAppliedSchemaVersion != sample.schemaVersion || data == nil
+        let newSchema = definition.schemaBuilder(metrics)
+        let schemaChanged = schema != newSchema || data == nil
         if schemaChanged {
+            series = definition.seriesBuilder(metrics)
+            schema = newSchema
             rebuildEmptyData(series: series)
-            lastAppliedSchemaVersion = sample.schemaVersion
         }
+
+        let sample = MaterializedMetricsSample(
+            sampleID: appendedCount,
+            values: series.map { descriptor in
+                let chartValue = descriptor.chartValue(metrics)
+                return .init(
+                    chartValue: chartValue,
+                    detailsValue: descriptor.detailsValue?(metrics) ?? chartValue
+                )
+            }
+        )
 
         appendEntries(from: sample, series: series)
         trimToCapacity(capacity)
         updateSinglePointAppearance(series: series)
 
         rightBoundary = sample.sampleID
+        appendedCount += 1
         return UpdateResult(schemaChanged: schemaChanged)
     }
 
@@ -133,7 +153,14 @@ final class MetricsChartController {
     ) {
         for (index, _) in series.enumerated() {
             dataSets[index].append(
-                ChartDataEntry(x: Double(sample.sampleID), y: sample.values[index].chartValue)
+                ChartDataEntry(
+                    x: Double(sample.sampleID),
+                    y: sample.values[index].chartValue,
+                    data: MaterializedChartPoint(
+                        descriptorIndex: index,
+                        detailsValue: sample.values[index].detailsValue
+                    )
+                )
             )
         }
     }
@@ -154,18 +181,13 @@ final class MetricsChartController {
 @MainActor
 final class MetricsChartStore: ObservableObject {
     @Published fileprivate var chartRevision = 0
-    fileprivate private(set) var latestSample: MaterializedMetricsSample?
-    private(set) var visibleSeries: [MetricsSeriesDescriptor] = []
 
-    let controller = MetricsChartController()
+    let controller = ChartDataController()
 
     private var showUpdates = true
 
     private let definition: MetricsChartDefinition
     private let capacity: Int
-    private var schema: AnyHashable?
-    private var schemaVersion = 0
-    private var appendedCount = 0
     private var metricsSubscription: AnyCancellable?
 
     init(
@@ -192,32 +214,11 @@ final class MetricsChartStore: ObservableObject {
     }
 
     private func append(_ metrics: Metrics) {
-        let newSchema = definition.schemaBuilder(metrics)
-        if schema != newSchema {
-            visibleSeries = definition.seriesBuilder(metrics)
-            schema = newSchema
-            schemaVersion += 1
-        }
-
-        let materializedSample = MaterializedMetricsSample(
-            sampleID: appendedCount,
-            schemaVersion: schemaVersion,
-            values: visibleSeries.map { descriptor in
-                let chartValue = descriptor.chartValue(metrics)
-                return .init(
-                    chartValue: chartValue,
-                    detailsValue: descriptor.detailsValue?(metrics) ?? chartValue
-                )
-            }
-        )
-
-        appendedCount += 1
         controller.append(
-            sample: materializedSample,
-            series: visibleSeries,
+            metrics: metrics,
+            definition: definition,
             capacity: capacity
         )
-        latestSample = materializedSample
         if showUpdates {
             chartRevision += 1
         }
@@ -283,14 +284,16 @@ private final class MetricsCurrentValuesRenderer: LineChartRenderer {
         let items: [Item]
     }
 
-    var rows: [Row] = []
-
     override func drawExtras(context: CGContext) {
         super.drawExtras(context: context)
         drawLatestValues(context: context)
     }
 
     private func drawLatestValues(context: CGContext) {
+        guard let chartView = dataProvider as? MetricsLineChartView else { return }
+        let rows = MainActor.assumeIsolated {
+            Self.makeRows(chartView: chartView)
+        }
         guard !rows.isEmpty else { return }
 
         let fontSize: CGFloat = 10
@@ -326,6 +329,56 @@ private final class MetricsCurrentValuesRenderer: LineChartRenderer {
             }
         }
     }
+
+    @MainActor
+    private static func makeRows(chartView: MetricsLineChartView) -> [Row] {
+        guard let data = chartView.data else { return [] }
+
+        var rows: [Row] = []
+        var currentGroup: String?
+        var currentItems: [Row.Item] = []
+
+        func flushCurrentRow() {
+            guard !currentItems.isEmpty else { return }
+            rows.append(.init(items: currentItems))
+            currentItems = []
+        }
+
+        for (index, descriptor) in chartView.series.enumerated() where descriptor.showsDetails {
+            guard chartView.schemaDataSetIndices.indices.contains(index) else { continue }
+            let dataSetIndex = chartView.schemaDataSetIndices[index]
+            guard data.dataSets.indices.contains(dataSetIndex),
+                  let dataSet = data.dataSets[dataSetIndex] as? LineChartDataSet,
+                  dataSet.count > 0,
+                  let point = dataSet[dataSet.count - 1].data as? MaterializedChartPoint,
+                  point.descriptorIndex == index else {
+                continue
+            }
+
+            let group = descriptor.detailsGroup ?? "__details_\(index)"
+            if currentGroup != group {
+                flushCurrentRow()
+                currentGroup = group
+            }
+
+            let itemColor: NSColor = switch descriptor.kind {
+            case .line:
+                NSColor(descriptor.color)
+            case .fill:
+                .secondaryLabelColor
+            }
+
+            currentItems.append(
+                .init(
+                    text: descriptor.detailsFormatter(point.detailsValue),
+                    color: itemColor
+                )
+            )
+        }
+
+        flushCurrentRow()
+        return rows
+    }
 }
 
 final class MetricsLineChartView: LineChartView {
@@ -334,12 +387,8 @@ final class MetricsLineChartView: LineChartView {
         steps: [1, 1.5, 2, 3, 4, 5, 6, 8, 10],
         spaceTop: 0.05
     )
-
-    fileprivate var currentValueRows: [MetricsCurrentValuesRenderer.Row] = [] {
-        didSet {
-            (renderer as? MetricsCurrentValuesRenderer)?.rows = currentValueRows
-        }
-    }
+    fileprivate var series: [MetricsSeriesDescriptor] = []
+    fileprivate var schemaDataSetIndices: [Int] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -357,7 +406,6 @@ final class MetricsLineChartView: LineChartView {
             animator: chartAnimator,
             viewPortHandler: viewPortHandler
         )
-        renderer.rows = currentValueRows
         self.renderer = renderer
     }
 
@@ -367,9 +415,8 @@ final class MetricsLineChartView: LineChartView {
 }
 
 private struct MetricsDGChartView: NSViewRepresentable {
-    let controller: MetricsChartController
-    let series: [MetricsSeriesDescriptor]
-    let sample: MaterializedMetricsSample
+    let controller: ChartDataController
+    let revision: Int
     let capacity: Int
     let yStart: Double
     let yAxisLabelCount: Int
@@ -385,7 +432,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.extraTopOffset = 8
         chartView.extraBottomOffset = 4
         chartView.extraRightOffset = 40
-        chartView.currentValueRows = makeCurrentValueRows()
+        chartView.series = controller.series
+        chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
 
         let xAxis = chartView.xAxis
         xAxis.enabled = true
@@ -404,7 +452,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
             chartView.yMaxStabilizer.reset()
         }
 
-        chartView.currentValueRows = makeCurrentValueRows()
+        chartView.series = controller.series
+        chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
         chartView.refreshData()
 
         configureLegend(chartView)
@@ -412,41 +461,25 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.notifyDataSetChanged()
     }
 
-    private func makeCurrentValueRows() -> [MetricsCurrentValuesRenderer.Row] {
-        var rows: [MetricsCurrentValuesRenderer.Row] = []
-        var currentGroup: String?
-        var currentItems: [MetricsCurrentValuesRenderer.Row.Item] = []
-
-        func flushCurrentRow() {
-            guard !currentItems.isEmpty else { return }
-            rows.append(.init(items: currentItems))
-            currentItems = []
+    private func makeSchemaDataSetIndices() -> [Int] {
+        let fillIndices = controller.series.enumerated().compactMap { index, descriptor in
+            descriptor.kind == .fill ? index : nil
+        }
+        let lineIndices = controller.series.enumerated().compactMap { index, descriptor in
+            descriptor.kind == .line ? index : nil
         }
 
-        for (index, descriptor) in series.enumerated() where descriptor.showsDetails {
-            let group = descriptor.detailsGroup ?? "__details_\(index)"
-            if currentGroup != group {
-                flushCurrentRow()
-                currentGroup = group
-            }
+        var dataSetIndices = Array(repeating: 0, count: controller.series.count)
 
-            let itemColor: NSColor = switch descriptor.kind {
-            case .line:
-                NSColor(descriptor.color)
-            case .fill:
-                .secondaryLabelColor
-            }
-
-            currentItems.append(
-                .init(
-                    text: descriptor.detailsFormatter(sample.values[index].detailsValue),
-                    color: itemColor
-                )
-            )
+        for (drawIndex, seriesIndex) in fillIndices.enumerated() {
+            dataSetIndices[seriesIndex] = drawIndex
         }
 
-        flushCurrentRow()
-        return rows
+        for (offset, seriesIndex) in lineIndices.reversed().enumerated() {
+            dataSetIndices[seriesIndex] = fillIndices.count + offset
+        }
+
+        return dataSetIndices
     }
 
     private func configureAxes(_ chartView: MetricsLineChartView) {
@@ -489,8 +522,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
         legend.yOffset = -1
         legend.font = .systemFont(ofSize: 12)
         legend.textColor = NSColor(Color.secondary)
-        let legendSeries = series.filter { $0.kind == .line }
-        legend.setCustom(entries: (legendSeries.isEmpty ? series : legendSeries).map { descriptor in
+        let legendSeries = controller.series.filter { $0.kind == .line }
+        legend.setCustom(entries: (legendSeries.isEmpty ? controller.series : legendSeries).map { descriptor in
             let entry = LegendEntry(label: descriptor.title)
             entry.formColor = NSColor(descriptor.color)
             return entry
@@ -535,11 +568,10 @@ struct MetricsChartSection: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            if let latestSample = store.latestSample {
+            if store.controller.data != nil {
                 MetricsDGChartView(
                     controller: store.controller,
-                    series: store.visibleSeries,
-                    sample: latestSample,
+                    revision: store.chartRevision,
                     capacity: capacity,
                     yStart: yStart,
                     yAxisLabelCount: yAxisLabelCount
@@ -564,7 +596,6 @@ struct MetricsChartSection: View {
             store.setShowUpdates(newValue)
         }
     }
-
 
     private func headerView() -> some View {
         HStack(alignment: .bottom) {
