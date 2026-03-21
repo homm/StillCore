@@ -169,7 +169,7 @@ final class MetricsChartStore: ObservableObject {
 
     let controller = MetricsChartController()
 
-    private var isUIEnabled = true
+    private var showUpdates = true
 
     private let definition: MetricsChartDefinition
     private let capacity: Int
@@ -192,11 +192,11 @@ final class MetricsChartStore: ObservableObject {
             }
     }
 
-    func setUIEnabled(_ isEnabled: Bool) {
-        guard isUIEnabled != isEnabled else { return }
-        isUIEnabled = isEnabled
+    func setShowUpdates(_ showUpdates: Bool) {
+        guard self.showUpdates != showUpdates else { return }
+        self.showUpdates = showUpdates
 
-        if isEnabled {
+        if showUpdates {
             chartRevision += 1
         }
     }
@@ -228,7 +228,7 @@ final class MetricsChartStore: ObservableObject {
             capacity: capacity
         )
         latestMetrics = metrics
-        if isUIEnabled {
+        if showUpdates {
             chartRevision += 1
         }
     }
@@ -387,7 +387,6 @@ final class MetricsLineChartView: LineChartView {
 
 private struct MetricsDGChartView: NSViewRepresentable {
     let controller: MetricsChartController
-    let revision: Int
     let series: [MetricsSeriesDescriptor]
     let metrics: Metrics
     let capacity: Int
@@ -496,9 +495,13 @@ struct MetricsChartSection: View {
     let showUpdates: Bool
     let yAxisLabelCount: Int
     let yStart: Double
+    // The chart store owns the long-lived chart data/controller state for this section.
+    // It must be created once per section instance and survive SwiftUI body recomputation.
     @StateObject private var store: MetricsChartStore
     @State private var isHelpPresented = false
 
+    // The section initializer receives the chart definition and the shared metrics stream,
+    // then creates a persistent store instance that subscribes to that stream exactly once.
     init(
         definition: MetricsChartDefinition,
         metricsPublisher: AnyPublisher<Metrics, Never>,
@@ -526,7 +529,6 @@ struct MetricsChartSection: View {
             if let lastMetrics = store.latestMetrics {
                 MetricsDGChartView(
                     controller: store.controller,
-                    revision: store.chartRevision,
                     series: store.visibleSeries,
                     metrics: lastMetrics,
                     capacity: capacity,
@@ -547,10 +549,10 @@ struct MetricsChartSection: View {
         .padding(.top, 2)
         .overlay(alignment: .topLeading, content: headerView)
         .onAppear {
-            store.setUIEnabled(showUpdates)
+            store.setShowUpdates(showUpdates)
         }
         .onChange(of: showUpdates) { _, newValue in
-            store.setUIEnabled(newValue)
+            store.setShowUpdates(newValue)
         }
     }
 
