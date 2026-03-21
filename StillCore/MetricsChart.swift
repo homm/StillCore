@@ -420,12 +420,103 @@ final class UpperBoundStabilizer {
 }
 
 
+
+private final class MetricsCurrentValuesRenderer: LineChartRenderer {
+    struct Row {
+        let valueText: String
+        let valueColor: NSColor
+        let usageText: String?
+    }
+
+    var rows: [Row] = []
+
+    override func drawExtras(context: CGContext) {
+        super.drawExtras(context: context)
+        drawLatestValues(context: context)
+    }
+
+    private func drawLatestValues(context: CGContext) {
+        guard !rows.isEmpty else { return }
+
+        let fontSize: CGFloat = 10
+        let valueAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold),
+        ]
+        let usageAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+
+        let leftX = viewPortHandler.contentRight
+        let valueTopPadding: CGFloat = 4
+
+        let measuredRows: [(value: NSAttributedString, valueSize: CGSize, usage: NSAttributedString?, usageSize: CGSize)] = rows.map { row in
+            let value = NSAttributedString(
+                string: row.valueText,
+                attributes: valueAttributes.merging([
+                    .foregroundColor: row.valueColor,
+                ]) { _, new in new }
+            )
+            let valueSize = value.size()
+
+            let usage = row.usageText.map {
+                NSAttributedString(string: $0, attributes: usageAttributes)
+            }
+            let usageSize = usage?.size() ?? .zero
+
+            return (value, valueSize, usage, usageSize)
+        }
+
+        let totalHeight = measuredRows.reduce(CGFloat.zero) { partial, row in
+            partial + valueTopPadding + row.valueSize.height + row.usageSize.height
+        }
+        var currentY = viewPortHandler.contentBottom - totalHeight
+
+        for row in measuredRows {
+            currentY += valueTopPadding
+            row.value.draw(at: CGPoint(x: leftX, y: currentY))
+            currentY += row.valueSize.height
+
+            if let usage = row.usage {
+                usage.draw(at: CGPoint(x: leftX, y: currentY))
+                currentY += row.usageSize.height
+            }
+        }
+    }
+}
+
 final class MetricsLineChartView: LineChartView {
     let yMaxStabilizer = UpperBoundStabilizer(
         shrinkThreshold: 0.6,
         steps: [1, 1.5, 2.5, 4, 6, 10],
         spaceTop: 0.1
     )
+
+    fileprivate var currentValueRows: [MetricsCurrentValuesRenderer.Row] = [] {
+        didSet {
+            (renderer as? MetricsCurrentValuesRenderer)?.rows = currentValueRows
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        installCurrentValuesRenderer()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        installCurrentValuesRenderer()
+    }
+
+    private func installCurrentValuesRenderer() {
+        let renderer = MetricsCurrentValuesRenderer(
+            dataProvider: self,
+            animator: chartAnimator,
+            viewPortHandler: viewPortHandler
+        )
+        renderer.rows = currentValueRows
+        self.renderer = renderer
+    }
 
     func refreshUI() {
         data?.notifyDataChanged()
@@ -437,9 +528,12 @@ private struct MetricsDGChartView: NSViewRepresentable {
     let controller: MetricsChartController
     let revision: Int
     let series: [MetricsSeriesDescriptor]
+    let metrics: Metrics
     let capacity: Int
     let yStart: Double
     let desiredCount: Int
+    let valueFormatter: (Double) -> String
+    let usageValueFormatter: ((Double) -> String)?
 
     func makeNSView(context: Context) -> MetricsLineChartView {
         let chartView = MetricsLineChartView()
@@ -450,6 +544,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.scaleYEnabled = false
         chartView.minOffset = 0
         chartView.extraTopOffset = 8
+        chartView.extraRightOffset = 40
+        chartView.currentValueRows = makeCurrentValueRows()
 
         let xAxis = chartView.xAxis
         xAxis.enabled = true
@@ -468,9 +564,27 @@ private struct MetricsDGChartView: NSViewRepresentable {
             chartView.yMaxStabilizer.reset()
         }
 
+        chartView.currentValueRows = makeCurrentValueRows()
+
         configureLegend(chartView)
         configureAxes(chartView)
         chartView.refreshUI()
+    }
+
+    private func makeCurrentValueRows() -> [MetricsCurrentValuesRenderer.Row] {
+        series.map { descriptor in
+            MetricsCurrentValuesRenderer.Row(
+                valueText: valueFormatter(descriptor.value(metrics)),
+                valueColor: NSColor(descriptor.color),
+                usageText: {
+                    guard let usageValueFormatter,
+                          let usageValue = descriptor.usageValue else {
+                        return nil
+                    }
+                    return usageValueFormatter(usageValue(metrics))
+                }()
+            )
+        }
     }
 
     private func configureAxes(_ chartView: MetricsLineChartView) {
@@ -564,11 +678,13 @@ struct MetricsChartSection: View {
                     controller: store.controller,
                     revision: store.chartRevision,
                     series: store.visibleSeries,
+                    metrics: lastMetrics,
                     capacity: capacity,
                     yStart: yStart,
-                    desiredCount: desiredCount
+                    desiredCount: desiredCount,
+                    valueFormatter: valueFormatter,
+                    usageValueFormatter: usageValueFormatter
                 )
-                latestValuesView(series: store.visibleSeries, metrics: lastMetrics)
             } else {
                 VStack(alignment: .leading) {
                     Spacer().frame(height: 24)
@@ -590,23 +706,6 @@ struct MetricsChartSection: View {
         }
     }
 
-    private func latestValuesView(series: [MetricsSeriesDescriptor], metrics: Metrics) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer()
-            ForEach(Array(series.enumerated()), id: \.offset) { _, series in
-                Text(valueFormatter(series.value(metrics)))
-                    .font(.system(.footnote, design: .monospaced))
-                    .fontWeight(.bold)
-                    .foregroundStyle(series.color)
-                    .padding(.top, 4)
-                if let usageValueFormatter, let usageValue = series.usageValue {
-                    Text(usageValueFormatter(usageValue(metrics)))
-                        .font(.system(.footnote, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
 
     private func headerView() -> some View {
         HStack(alignment: .bottom) {

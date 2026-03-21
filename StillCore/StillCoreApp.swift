@@ -27,6 +27,10 @@ enum AppPresentation {
     static let chartHistoryCapacity = 180
 }
 
+enum FormatLocale {
+    static let posix = Locale(identifier: "en_US_POSIX")
+}
+
 // MARK: - DI
 
 @MainActor
@@ -287,19 +291,19 @@ struct ContentView: View {
     }
 
     private func formattedWatts(_ value: Double) -> String {
-        String(format: "%6.2f", locale: Locale(identifier: "en_US_POSIX"), value)
+        String(format: "%6.2f", locale: FormatLocale.posix, value)
     }
 
     private func formattedTemperature(_ value: Double) -> String {
-        String(format: "%5.1f ", locale: Locale(identifier: "en_US_POSIX"), value)
+        String(format: "%5.1f ", locale: FormatLocale.posix, value)
     }
 
     private func formattedFrequencyMHz(_ value: Double) -> String {
-        String(format: "%6.2f",locale: Locale(identifier: "en_US_POSIX"), value)
+        String(format: "%6.2f", locale: FormatLocale.posix, value)
     }
 
     private func formattedUsage(_ value: Double) -> String {
-        String(format: "%5.1f%%", locale: Locale(identifier: "en_US_POSIX"), value * 100.0)
+        String(format: "%5.1f%%", locale: FormatLocale.posix, value * 100.0)
     }
 
     private var intervalLabel: String {
@@ -307,7 +311,7 @@ struct ContentView: View {
         if interval < 1_000 {
             return "\(interval) ms"
         }
-        return String(format: "%.2f s", Double(interval) / 1000.0)
+        return String(format: "%.2f s", locale: FormatLocale.posix, Double(interval) / 1000.0)
     }
 }
 
