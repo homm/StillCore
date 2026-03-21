@@ -306,6 +306,8 @@ final class MetricsChartStore: ObservableObject {
 
     let controller = MetricsChartController()
 
+    private var isUIEnabled = true
+
     private let definition: MetricsChartDefinition
     private let capacity: Int
     private var schema: AnyHashable?
@@ -325,6 +327,15 @@ final class MetricsChartStore: ObservableObject {
             .sink { [weak self] metrics in
                 self?.append(metrics)
             }
+    }
+
+    func setUIEnabled(_ isEnabled: Bool) {
+        guard isUIEnabled != isEnabled else { return }
+        isUIEnabled = isEnabled
+
+        if isEnabled {
+            chartRevision += 1
+        }
     }
 
     private func append(_ metrics: Metrics) {
@@ -354,7 +365,9 @@ final class MetricsChartStore: ObservableObject {
             capacity: capacity
         )
         latestMetrics = metrics
-        chartRevision += 1
+        if isUIEnabled {
+            chartRevision += 1
+        }
     }
 }
 
@@ -510,6 +523,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
 struct MetricsChartSection: View {
     let definition: MetricsChartDefinition
     let capacity: Int
+    let isVisible: Bool
     let valueFormatter: (Double) -> String
     var usageValueFormatter: ((Double) -> String)? = nil
     var desiredCount = 6
@@ -521,6 +535,7 @@ struct MetricsChartSection: View {
         definition: MetricsChartDefinition,
         metricsPublisher: AnyPublisher<Metrics, Never>,
         capacity: Int,
+        isVisible: Bool,
         valueFormatter: @escaping (Double) -> String,
         usageValueFormatter: ((Double) -> String)? = nil,
         desiredCount: Int = 6,
@@ -528,6 +543,7 @@ struct MetricsChartSection: View {
     ) {
         self.definition = definition
         self.capacity = capacity
+        self.isVisible = isVisible
         self.valueFormatter = valueFormatter
         self.usageValueFormatter = usageValueFormatter
         self.desiredCount = desiredCount
@@ -566,6 +582,12 @@ struct MetricsChartSection: View {
         }
         .padding(.top, 2)
         .overlay(alignment: .topLeading, content: headerView)
+        .onAppear {
+            store.setUIEnabled(isVisible)
+        }
+        .onChange(of: isVisible) { _, newValue in
+            store.setUIEnabled(newValue)
+        }
     }
 
     private func latestValuesView(series: [MetricsSeriesDescriptor], metrics: Metrics) -> some View {

@@ -191,6 +191,7 @@ struct ContentView: View {
                             definition: MetricsChartDefinitions.power,
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
+                            isVisible: presentationState.isWindowVisible,
                             valueFormatter: formattedWatts
                         )
                             .frame(height: metrics.size.height * 0.35)
@@ -204,6 +205,7 @@ struct ContentView: View {
                             definition: MetricsChartDefinitions.frequency,
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
+                            isVisible: presentationState.isWindowVisible,
                             valueFormatter: formattedFrequencyMHz,
                             usageValueFormatter: formattedUsage
                         )
@@ -218,6 +220,7 @@ struct ContentView: View {
                             definition: MetricsChartDefinitions.temperature,
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
+                            isVisible: presentationState.isWindowVisible,
                             valueFormatter: formattedTemperature,
                             desiredCount: 4,
                             yStart: 30
