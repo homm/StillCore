@@ -275,25 +275,20 @@ final class UpperBoundStabilizer {
 
 
 private final class MetricsCurrentValuesRenderer: LineChartRenderer {
-    struct Row {
-        struct Item {
-            let text: String
-            let color: NSColor
-        }
-
-        let items: [Item]
-    }
-
     override func drawExtras(context: CGContext) {
         super.drawExtras(context: context)
-        drawLatestValues(context: context)
-    }
-
-    private func drawLatestValues(context: CGContext) {
         guard let chartView = dataProvider as? MetricsLineChartView else { return }
         let rows = MainActor.assumeIsolated {
-            Self.makeRows(chartView: chartView)
+            let slice = chartView.getMaterializedPointsSlice()
+            return MetricsDetailsBuilder.buildRows(
+                from: slice,
+                series: chartView.series
+            )
         }
+        drawLatestValues(context: context, rows: rows)
+    }
+
+    private func drawLatestValues(context: CGContext, rows: [MetricsDetailsBuilder.Row]) {
         guard !rows.isEmpty else { return }
 
         let fontSize: CGFloat = 10
@@ -329,10 +324,26 @@ private final class MetricsCurrentValuesRenderer: LineChartRenderer {
             }
         }
     }
+}
+
+fileprivate enum MetricsDetailsBuilder {
+    struct Row {
+        struct Item {
+            let text: String
+            let color: NSColor
+        }
+
+        let items: [Item]
+    }
 
     @MainActor
-    private static func makeRows(chartView: MetricsLineChartView) -> [Row] {
-        guard let data = chartView.data else { return [] }
+    static func buildRows(
+        from slice: [MaterializedChartPoint],
+        series: [MetricsSeriesDescriptor]
+    ) -> [Row] {
+        let sortedSlice = slice.sorted { lhs, rhs in
+            lhs.descriptorIndex < rhs.descriptorIndex
+        }
 
         var rows: [Row] = []
         var currentGroup: String?
@@ -344,18 +355,12 @@ private final class MetricsCurrentValuesRenderer: LineChartRenderer {
             currentItems = []
         }
 
-        for (index, descriptor) in chartView.series.enumerated() where descriptor.showsDetails {
-            guard chartView.schemaDataSetIndices.indices.contains(index) else { continue }
-            let dataSetIndex = chartView.schemaDataSetIndices[index]
-            guard data.dataSets.indices.contains(dataSetIndex),
-                  let dataSet = data.dataSets[dataSetIndex] as? LineChartDataSet,
-                  dataSet.count > 0,
-                  let point = dataSet[dataSet.count - 1].data as? MaterializedChartPoint,
-                  point.descriptorIndex == index else {
-                continue
-            }
+        for point in sortedSlice {
+            guard series.indices.contains(point.descriptorIndex) else { continue }
+            let descriptor = series[point.descriptorIndex]
+            guard descriptor.showsDetails else { continue }
 
-            let group = descriptor.detailsGroup ?? "__details_\(index)"
+            let group = descriptor.detailsGroup ?? "__details_\(point.descriptorIndex)"
             if currentGroup != group {
                 flushCurrentRow()
                 currentGroup = group
@@ -401,12 +406,29 @@ final class MetricsLineChartView: LineChartView {
     }
 
     private func installCurrentValuesRenderer() {
-        let renderer = MetricsCurrentValuesRenderer(
+        self.renderer = MetricsCurrentValuesRenderer(
             dataProvider: self,
             animator: chartAnimator,
             viewPortHandler: viewPortHandler
         )
-        self.renderer = renderer
+    }
+
+    @MainActor
+    fileprivate func getMaterializedPointsSlice(x: Double? = nil) -> [MaterializedChartPoint] {
+        guard let data else { return [] }
+        var slice: [MaterializedChartPoint] = []
+
+        for case let dataSet as LineChartDataSet in data.dataSets {
+            let x = x ?? dataSet.last?.x
+            guard let x else { continue }
+
+            for entry in dataSet.entriesForXValue(x) {
+                guard let point = entry.data as? MaterializedChartPoint else { continue }
+                slice.append(point)
+            }
+        }
+
+        return slice
     }
 
     func refreshData() {
