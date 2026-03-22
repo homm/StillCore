@@ -108,10 +108,11 @@ final class ChartDataController {
             dataSet.mode = .linear
             dataSet.drawValuesEnabled = false
             dataSet.drawCirclesEnabled = false
-            dataSet.highlightEnabled = false
 
             switch descriptor.kind {
             case .line:
+                dataSet.highlightEnabled = true
+                dataSet.drawHorizontalHighlightIndicatorEnabled = false
                 dataSet.drawCircleHoleEnabled = false
                 dataSet.drawFilledEnabled = false
                 dataSet.lineWidth = descriptor.lineWidth
@@ -119,6 +120,7 @@ final class ChartDataController {
                 dataSet.setColor(NSColor(descriptor.color))
                 dataSet.setCircleColor(NSColor(descriptor.color))
             case .fill:
+                dataSet.highlightEnabled = false
                 dataSet.lineWidth = 0
                 dataSet.drawFilledEnabled = true
                 dataSet.fillColor = NSColor(descriptor.color)
@@ -386,6 +388,110 @@ fileprivate enum MetricsDetailsBuilder {
     }
 }
 
+fileprivate final class MetricsDetailsMarker: MarkerView {
+    private var rows: [MetricsDetailsBuilder.Row] = []
+    private let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .bold)
+    private let contentInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+    private let rowSpacing: CGFloat = 4
+    private let cornerRadius: CGFloat = 8
+    private let markerSpacing: CGFloat = 8
+
+    @MainActor
+    override func refreshContent(entry: ChartDataEntry, highlight: Highlight) {
+        guard let chartView = chartView as? MetricsLineChartView else {
+            rows = []
+            frame.size = .zero
+            return
+        }
+
+        rows = MetricsDetailsBuilder.buildRows(
+            from: chartView.getMaterializedPointsSlice(x: entry.x),
+            series: chartView.series
+        )
+
+        let itemAttributes: [NSAttributedString.Key: Any] = [.font: font]
+        let rowHeights = rows.map { row in
+            row.items.reduce(CGFloat.zero) { height, item in
+                let text = NSAttributedString(string: item.text, attributes: itemAttributes)
+                return height + text.size().height
+            }
+        }
+        let contentWidth = rows.reduce(CGFloat.zero) { width, row in
+            let rowWidth = row.items.reduce(CGFloat.zero) { partial, item in
+                let text = NSAttributedString(string: item.text, attributes: itemAttributes)
+                return max(partial, text.size().width)
+            }
+            return max(width, rowWidth)
+        }
+        let contentHeight = rowHeights.reduce(CGFloat.zero, +)
+            + rowSpacing * CGFloat(max(rows.count - 1, 0))
+        let size = CGSize(
+            width: contentInsets.left + contentWidth + contentInsets.right,
+            height: contentInsets.top + contentHeight + contentInsets.bottom
+        )
+
+        frame.size = size
+        offset = CGPoint(x: -size.width - markerSpacing, y: -size.height / 2)
+    }
+
+    override func draw(context: CGContext, point: CGPoint) {
+        guard !rows.isEmpty else { return }
+
+        let offset = offsetForDrawing(atPoint: point)
+        let rect = CGRect(
+            x: point.x + offset.x,
+            y: point.y + offset.y,
+            width: bounds.width,
+            height: bounds.height
+        )
+
+        context.saveGState()
+
+        let path = CGPath(
+            roundedRect: rect,
+            cornerWidth: cornerRadius,
+            cornerHeight: cornerRadius,
+            transform: nil
+        )
+        context.addPath(path)
+        context.setFillColor(NSColor.controlBackgroundColor.withAlphaComponent(0.96).cgColor)
+        context.fillPath()
+
+        context.addPath(path)
+        context.setStrokeColor(NSColor.separatorColor.cgColor)
+        context.setLineWidth(1)
+        context.strokePath()
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byClipping
+
+        let itemBaseAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraphStyle,
+        ]
+
+        var currentY = rect.minY + contentInsets.top
+        for (rowIndex, row) in rows.enumerated() {
+            if rowIndex > 0 {
+                currentY += rowSpacing
+            }
+
+            for item in row.items {
+                let text = NSAttributedString(
+                    string: item.text,
+                    attributes: itemBaseAttributes.merging([
+                        .foregroundColor: item.color,
+                    ]) { _, new in new }
+                )
+                text.draw(at: CGPoint(x: rect.minX + contentInsets.left, y: currentY))
+                currentY += text.size().height
+            }
+        }
+
+        context.restoreGState()
+    }
+}
+
 final class MetricsLineChartView: LineChartView {
     let yMaxStabilizer = UpperBoundStabilizer(
         shrinkThreshold: 0.7,
@@ -410,6 +516,20 @@ final class MetricsLineChartView: LineChartView {
             dataProvider: self,
             animator: chartAnimator,
             viewPortHandler: viewPortHandler
+        )
+        let marker = MetricsDetailsMarker()
+        marker.chartView = self
+        self.marker = marker
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        highlightValue(nil, callDelegate: true)
+    }
+
+    override func getMarkerPosition(highlight: Highlight) -> CGPoint {
+        CGPoint(
+            x: highlight.drawX,
+            y: viewPortHandler.contentTop + viewPortHandler.contentHeight / 2
         )
     }
 
@@ -448,6 +568,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.drawBordersEnabled = false
         chartView.drawGridBackgroundEnabled = false
         chartView.chartDescription.enabled = false
+        chartView.drawMarkers = true
+        chartView.highlightPerTapEnabled = true
         chartView.scaleXEnabled = false
         chartView.scaleYEnabled = false
         chartView.minOffset = 0
@@ -474,6 +596,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
             chartView.yMaxStabilizer.reset()
         }
 
+        (chartView.marker as? MetricsDetailsMarker)?.chartView = chartView
         chartView.series = controller.series
         chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
         chartView.refreshData()
