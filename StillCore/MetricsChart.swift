@@ -284,6 +284,7 @@ final class MetricsLineChartView: LineChartView {
     )
     var series: [MetricsSeriesDescriptor] = []
     fileprivate var schemaDataSetIndices: [Int] = []
+    var clearHighlight: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -307,7 +308,7 @@ final class MetricsLineChartView: LineChartView {
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        highlightValue(nil, callDelegate: true)
+        clearHighlight?()
     }
 
     override func getMarkerPosition(highlight: Highlight) -> CGPoint {
@@ -335,8 +336,28 @@ final class MetricsLineChartView: LineChartView {
         return slice
     }
 
-    func refreshData() {
-        data?.notifyDataChanged()
+    func applySharedHighlight(_ sampleX: Double?) {
+        guard highlighted.first?.x != sampleX || (sampleX == nil && !highlighted.isEmpty) else { return }
+
+        highlightValue(sampleX.flatMap(makeHighlight), callDelegate: false)
+    }
+
+    private func makeHighlight(for sampleX: Double) -> Highlight? {
+        guard let data else { return nil }
+
+        for dataSetIndex in data.dataSets.indices {
+            guard let dataSet = data.dataSets[dataSetIndex] as? LineChartDataSet,
+                  dataSet.highlightEnabled,
+                  let entry = dataSet.entryForXValue(sampleX, closestToY: Double.nan)
+            else {
+                continue
+            }
+
+            guard entry.x == sampleX else { continue }
+            return Highlight(x: entry.x, y: entry.y, dataSetIndex: dataSetIndex)
+        }
+
+        return nil
     }
 }
 
@@ -346,6 +367,34 @@ private struct MetricsDGChartView: NSViewRepresentable {
     let capacity: Int
     let yStart: Double
     let yAxisLabelCount: Int
+    @Binding var highlightedSampleX: Double?
+
+    final class Coordinator: NSObject, ChartViewDelegate {
+        private let highlightedSampleX: Binding<Double?>
+
+        init(highlightedSampleX: Binding<Double?>) {
+            self.highlightedSampleX = highlightedSampleX
+        }
+
+        nonisolated
+        func chartValueSelected(
+            _ chartView: ChartViewBase,
+            entry: ChartDataEntry,
+            highlight: Highlight
+        ) {
+            let sampleX = entry.x
+            Task { @MainActor [highlightedSampleX] in highlightedSampleX.wrappedValue = sampleX }
+        }
+
+        nonisolated
+        func chartValueNothingSelected(_ chartView: ChartViewBase) {
+            Task { @MainActor [highlightedSampleX] in highlightedSampleX.wrappedValue = nil }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(highlightedSampleX: $highlightedSampleX)
+    }
 
     func makeNSView(context: Context) -> MetricsLineChartView {
         let chartView = MetricsLineChartView()
@@ -362,6 +411,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.extraRightOffset = 40
         chartView.series = controller.series
         chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
+        chartView.clearHighlight = { highlightedSampleX = nil }
+        chartView.delegate = context.coordinator
 
         let xAxis = chartView.xAxis
         xAxis.enabled = true
@@ -381,13 +432,15 @@ private struct MetricsDGChartView: NSViewRepresentable {
         }
 
         (chartView.marker as? MetricsDetailsMarkerView)?.chartView = chartView
+        chartView.clearHighlight = { highlightedSampleX = nil }
         chartView.series = controller.series
         chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
-        chartView.refreshData()
+        chartView.data?.notifyDataChanged()
 
         configureLegend(chartView)
         configureAxes(chartView)
         chartView.notifyDataSetChanged()
+        chartView.applySharedHighlight(highlightedSampleX)
     }
 
     private func makeSchemaDataSetIndices() -> [Int] {
@@ -464,6 +517,7 @@ struct MetricsChartSection: View {
     let definition: MetricsChartDefinition
     let capacity: Int
     let showUpdates: Bool
+    @Binding var highlightedSampleX: Double?
     let yAxisLabelCount: Int
     let yStart: Double
     // The chart store owns the long-lived chart data/controller state for this section.
@@ -478,12 +532,14 @@ struct MetricsChartSection: View {
         metricsPublisher: AnyPublisher<Metrics, Never>,
         capacity: Int,
         showUpdates: Bool,
+        highlightedSampleX: Binding<Double?>,
         yAxisLabelCount: Int = 5,
         yStart: Double = 0.0
     ) {
         self.definition = definition
         self.capacity = capacity
         self.showUpdates = showUpdates
+        self._highlightedSampleX = highlightedSampleX
         self.yAxisLabelCount = yAxisLabelCount
         self.yStart = yStart
         _store = StateObject(
@@ -503,7 +559,8 @@ struct MetricsChartSection: View {
                     revision: store.chartRevision,
                     capacity: capacity,
                     yStart: yStart,
-                    yAxisLabelCount: yAxisLabelCount
+                    yAxisLabelCount: yAxisLabelCount,
+                    highlightedSampleX: $highlightedSampleX
                 )
             } else {
                 VStack(alignment: .leading) {

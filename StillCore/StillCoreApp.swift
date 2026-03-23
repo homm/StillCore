@@ -380,6 +380,7 @@ struct ContentView: View {
     @ObservedObject private var dependencies = AppDependencies.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var lastBatteryStatus: String = ""
+    @State private var highlightedChartSampleX: Double?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -419,7 +420,8 @@ struct ContentView: View {
                         definition: MetricsChartDefinitions.power,
                         metricsPublisher: dependencies.metricsPublisher,
                         capacity: AppPresentation.chartHistoryCapacity,
-                        showUpdates: presentationState.isWindowVisible
+                        showUpdates: presentationState.isWindowVisible,
+                        highlightedSampleX: $highlightedChartSampleX
                     )
                         .frame(height: metrics.size.height * 0.35)
                         .background(backgroundColor)
@@ -428,7 +430,8 @@ struct ContentView: View {
                         definition: MetricsChartDefinitions.frequency,
                         metricsPublisher: dependencies.metricsPublisher,
                         capacity: AppPresentation.chartHistoryCapacity,
-                        showUpdates: presentationState.isWindowVisible
+                        showUpdates: presentationState.isWindowVisible,
+                        highlightedSampleX: $highlightedChartSampleX
                     )
                         .frame(height: metrics.size.height * 0.35)
                         .background(backgroundColor)
@@ -438,6 +441,7 @@ struct ContentView: View {
                         metricsPublisher: dependencies.metricsPublisher,
                         capacity: AppPresentation.chartHistoryCapacity,
                         showUpdates: presentationState.isWindowVisible,
+                        highlightedSampleX: $highlightedChartSampleX,
                         yAxisLabelCount: 4,
                         yStart: 30
                     )
