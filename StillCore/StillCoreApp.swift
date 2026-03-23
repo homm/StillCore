@@ -21,7 +21,7 @@ enum AppSettings {
 enum AppPresentation {
     static let windowMinSize = CGSize(width: 420, height: 560)
     static let statusItemSystemImageName = "chart.bar.xaxis"
-    static let statusItemFallbackTitle = "MS"
+    static let statusItemFallbackTitle = "Core"
     static let statusItemToolTip = "StillCore"
     static let pinnedWindowTitle = "StillCore"
     static let chartHistoryCapacity = 180
@@ -511,8 +511,12 @@ struct ContentView: View {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var presentationController: MenuPresentationController<ContentView>?
+    private var statusMetricsSubscription: AnyCancellable?
+    private var statusItemFont = NSFont(name: "Menlo bold", size: 12) ??
+        .monospacedSystemFont(ofSize: 13, weight: .bold)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         presentationController = MenuPresentationController(
@@ -521,19 +525,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             configureStatusItem: { statusItem in
                 guard let button = statusItem.button else { return }
-
-                if let image = NSImage(
-                    systemSymbolName: AppPresentation.statusItemSystemImageName,
-                    accessibilityDescription: AppPresentation.statusItemToolTip
-                ) {
-                    image.isTemplate = true
-                    button.image = image
-                    button.title = ""
-                } else {
-                    button.title = AppPresentation.statusItemFallbackTitle
-                }
-
+                button.image = nil
                 button.toolTip = AppPresentation.statusItemToolTip
+                self.applyStatusItemTitle(AppPresentation.statusItemFallbackTitle, to: statusItem)
             },
             configureWindow: { window in
                 window.title = AppPresentation.pinnedWindowTitle
@@ -541,6 +535,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 window.minSize = AppPresentation.windowMinSize
             }
         )
+
+        statusMetricsSubscription = AppDependencies.shared.metricsPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] metrics in
+                self?.updateStatusItem(with: metrics)
+            }
+    }
+
+    private func updateStatusItem(with metrics: Metrics) {
+        guard let statusItem = presentationController?.statusItem else { return }
+        applyStatusItemTitle(formatStatusItemPower(metrics.power.board), to: statusItem)
+    }
+
+    private func formatStatusItemPower(_ value: Float) -> String {
+        String(format: "%4.1f W", locale: FormatLocale.posix, Double(value))
+    }
+
+    private func applyStatusItemTitle(_ title: String, to statusItem: NSStatusItem) {
+        let attributedTitle = NSAttributedString(string: title, attributes: [.font: statusItemFont])
+        statusItem.button?.attributedTitle = attributedTitle
+        statusItem.length = ceil(attributedTitle.size().width)
     }
 }
 
