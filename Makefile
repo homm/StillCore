@@ -2,6 +2,8 @@ NAME := StillCore
 PROJECT := $(NAME).xcodeproj
 CONFIGURATION ?= Debug
 DERIVED_DATA ?= .build
+MACMON_XCFRAMEWORK_PATH ?= ../../macmon/dist/CMacmon.xcframework
+export MACMON_XCFRAMEWORK_PATH
 XCODEBUILD_FLAGS := \
 	-quiet -hideShellScriptEnvironment \
 	ENABLE_CODE_COVERAGE=NO
@@ -25,7 +27,8 @@ help:
 			'make battery-watch  Build and run battery_tracker watch' \
 			'make profile        Build $(NAME) and launch xctrace Time Profiler' \
 			'make benchmarks     Run charts benchmarks' \
-			'make clean          Remove $(DERIVED_DATA)'
+			'make clean          Remove $(DERIVED_DATA)' \
+			'MACMON_XCFRAMEWORK_PATH=... overrides the macmon xcframework used by SwiftPM (default: ../../macmon/dist/CMacmon.xcframework)'
 
 app:
 	xcodebuild -project $(PROJECT) build \

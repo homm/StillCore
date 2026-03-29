@@ -99,7 +99,6 @@
 			buildPhases = (
 				AF9513E12E59D8B900550A10 /* Sources */,
 				AF9513E22E59D8B900550A10 /* Frameworks */,
-				B0A000002E5A000100000001 /* Copy libmacmon.dylib */,
 				AF9513E32E59D8B900550A10 /* Resources */,
 				AFFC83242E59E0410095EE6D /* CopyFiles */,
 			);
@@ -170,7 +169,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B0A000052E5A000100000001 /* XCRemoteSwiftPackageReference "Charts" */,
-				B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon/bindings/swift" */,
+				B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon-bindings/swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AF9513E62E59D8B900550A10 /* Products */;
@@ -193,27 +192,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		B0A000002E5A000100000001 /* Copy libmacmon.dylib */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Copy libmacmon.dylib";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"$SRCROOT/scripts/copy_macmon_dylib.sh\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AF9513E12E59D8B900550A10 /* Sources */ = {
@@ -236,6 +214,7 @@
 		AF9514052E59D8B900550A10 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -299,6 +278,7 @@
 		AF9514062E59D8B900550A10 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -354,6 +334,7 @@
 		AF9514082E59D8B900550A10 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -395,6 +376,7 @@
 		AF9514092E59D8B900550A10 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -436,6 +418,7 @@
 		AFFC83372E59EA600095EE6D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				INSTALL_PATH = "";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -446,6 +429,7 @@
 		AFFC83382E59EA600095EE6D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				INSTALL_PATH = "";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -486,9 +470,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon/bindings/swift" */ = {
+		B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon-bindings/swift" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../macmon/bindings/swift;
+			relativePath = ../macmon-bindings/swift;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -506,7 +490,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		B0A000032E5A000100000001 /* MacmonSwift */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon/bindings/swift" */;
+			package = B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon-bindings/swift" */;
 			productName = MacmonSwift;
 		};
 		B0A000062E5A000100000001 /* DGCharts */ = {
