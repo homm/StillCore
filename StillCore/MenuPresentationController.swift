@@ -148,6 +148,7 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
         guard let button = statusItemStorage.button else { return }
         button.target = self
         button.action = #selector(toggleFromStatusItem)
+        button.sendAction(on: [.leftMouseDown, .rightMouseDown])
     }
 
     private func repositionAttachedWindow() {
