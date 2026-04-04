@@ -51,6 +51,7 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
 
     private let statusItemStorage = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let presentationState = MenuPresentationState()
+    private let statusItemMenu: NSMenu?
     private let hostingView: NSHostingView<AnyView>
     private let managedWindow: NSWindow
 
@@ -60,11 +61,13 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
 
     init(
         @ViewBuilder content: @escaping ContentBuilder,
+        statusItemMenu: NSMenu? = nil,
         configureStatusItem: ((NSStatusItem) -> Void)? = nil,
         configureWindow: ((NSWindow) -> Void)? = nil
     ) {
         let hosted = makeHostingContainer(rootView: AnyView(content(presentationState)))
         hostingView = hosted.hostingView
+        self.statusItemMenu = statusItemMenu
 
         managedWindow = NSWindow(
             contentRect: bootstrapWindowFrame,
@@ -147,8 +150,8 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
     private func configureStatusItemAction() {
         guard let button = statusItemStorage.button else { return }
         button.target = self
-        button.action = #selector(toggleFromStatusItem)
-        button.sendAction(on: [.leftMouseDown, .rightMouseDown])
+        button.action = #selector(handleStatusItemAction)
+        button.sendAction(on: [.leftMouseDown, .rightMouseUp])
     }
 
     private func repositionAttachedWindow() {
@@ -166,7 +169,18 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
         managedWindow.setFrameOrigin(NSPoint(x: originX, y: originY))
     }
 
-    @objc private func toggleFromStatusItem() {
+    @objc private func handleStatusItemAction() {
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown:
+            toggleFromStatusItem()
+        case .rightMouseUp:
+            showStatusItemMenu()
+        default:
+            return
+        }
+    }
+
+    private func toggleFromStatusItem() {
         if presentationMode == .pinned, !managedWindow.isKeyWindow {
             showWindow()
         } else if managedWindow.isVisible {
@@ -174,6 +188,11 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
         } else {
             showWindow()
         }
+    }
+
+    private func showStatusItemMenu() {
+        guard let statusItemMenu else { return }
+        statusItemStorage.popUpMenu(statusItemMenu)
     }
 
     // Hide window on focus loss in attached mode

@@ -6,6 +6,7 @@ import MacmonSwift
 enum AppSettings {
     static let defaultMetricsIntervalMs = 2000
     private static let metricsIntervalKey = "metricsIntervalMs"
+    private static let statusItemDisplayModeKey = "statusItemDisplayMode"
 
     static var metricsIntervalMs: Int {
         get {
@@ -14,6 +15,15 @@ enum AppSettings {
         }
         set {
             UserDefaults.standard.set(newValue, forKey: metricsIntervalKey)
+        }
+    }
+
+    static var statusItemDisplayMode: String? {
+        get {
+            UserDefaults.standard.string(forKey: statusItemDisplayModeKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: statusItemDisplayModeKey)
         }
     }
 }
@@ -512,22 +522,39 @@ struct ContentView: View {
 }
 
 @MainActor
+private struct StatusItemDisplayDescriptor {
+    let displayName: String
+    let persistenceValue: String
+    let getValue: (Metrics) -> Double?
+    let formatValue: (Double) -> String
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var presentationController: MenuPresentationController<ContentView>?
     private var statusMetricsSubscription: AnyCancellable?
+    private let statusItemMenu = NSMenu()
+    private var lastMetrics: Metrics?
+    private var statusItemDisplayDescriptors: [StatusItemDisplayDescriptor] = []
+    private var selectedStatusItemDisplayPersistenceValue = AppSettings.statusItemDisplayMode ?? "icon"
     private var statusItemFont = NSFont(name: "Menlo bold", size: 12) ??
         .monospacedSystemFont(ofSize: 13, weight: .bold)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApplication), keyEquivalent: "")
+        quitItem.target = self
+        statusItemMenu.addItem(quitItem)
+
         presentationController = MenuPresentationController(
             content: { presentationState in
                 ContentView(presentationState: presentationState)
             },
+            statusItemMenu: statusItemMenu,
             configureStatusItem: { statusItem in
                 guard let button = statusItem.button else { return }
                 button.image = nil
                 button.toolTip = AppPresentation.statusItemToolTip
-                self.applyStatusItemTitle(AppPresentation.statusItemFallbackTitle, to: statusItem)
+                self.applyStatusItemDisplay(metrics: nil, to: statusItem)
             },
             configureWindow: { window in
                 window.title = AppPresentation.pinnedWindowTitle
@@ -545,17 +572,167 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem(with metrics: Metrics) {
         guard let statusItem = presentationController?.statusItem else { return }
-        applyStatusItemTitle(formatStatusItemPower(metrics.power.board), to: statusItem)
+        lastMetrics = metrics
+        if statusItemDisplayDescriptors.isEmpty {
+            buildStatusItemMenu(with: metrics)
+        }
+        selectedStatusItemDisplayPersistenceValue = sanitizedPersistenceValue(selectedStatusItemDisplayPersistenceValue)
+        AppSettings.statusItemDisplayMode = selectedStatusItemDisplayPersistenceValue
+        updateStatusItemMenuSelection()
+        applyStatusItemDisplay(metrics: metrics, to: statusItem)
     }
 
-    private func formatStatusItemPower(_ value: Float) -> String {
-        String(format: "%4.1f W", locale: FormatLocale.posix, Double(value))
+    private func formatStatusItemPower(_ value: Double) -> String {
+        String(format: "%4.1f W", locale: FormatLocale.posix, value)
+    }
+
+    private func formatStatusItemTemperature(_ value: Double) -> String {
+        String(format: "%4.1f C", locale: FormatLocale.posix, value)
+    }
+
+    private func formatStatusItemUsage(_ value: Double) -> String {
+        String(format: "%4.1f%%", locale: FormatLocale.posix, value * 100.0)
+    }
+
+    private func formatStatusItemFrequency(_ valueGHz: Double) -> String {
+        String(format: "%4.2f GHz", locale: FormatLocale.posix, valueGHz)
     }
 
     private func applyStatusItemTitle(_ title: String, to statusItem: NSStatusItem) {
         let attributedTitle = NSAttributedString(string: title, attributes: [.font: statusItemFont])
+        statusItem.button?.image = nil
         statusItem.button?.attributedTitle = attributedTitle
         statusItem.length = ceil(attributedTitle.size().width)
+    }
+
+    private func buildStatusItemMenu(with metrics: Metrics) {
+        statusItemDisplayDescriptors = makeStatusItemDisplayDescriptors(metrics: metrics)
+        statusItemMenu.insertItem(.separator(), at: 0)
+        for descriptor in statusItemDisplayDescriptors.reversed() {
+            let item = NSMenuItem(
+                title: descriptor.displayName,
+                action: #selector(selectStatusItemDisplayMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = descriptor.persistenceValue
+            statusItemMenu.insertItem(item, at: 0)
+        }
+        updateStatusItemMenuSelection()
+    }
+
+    private func applyStatusItemDisplay(metrics: Metrics?, to statusItem: NSStatusItem) {
+        guard
+            let metrics,
+            let descriptor = selectedStatusItemDisplayDescriptor,
+            let value = descriptor.getValue(metrics)
+        else {
+            applyStatusItemIcon(to: statusItem)
+            return
+        }
+
+        applyStatusItemTitle(descriptor.formatValue(value), to: statusItem)
+    }
+
+    private func applyStatusItemIcon(to statusItem: NSStatusItem) {
+        let image = NSImage(systemSymbolName: AppPresentation.statusItemSystemImageName, accessibilityDescription: AppPresentation.statusItemToolTip)
+        image?.isTemplate = true
+        statusItem.button?.image = image
+        statusItem.button?.attributedTitle = NSAttributedString(string: "")
+        statusItem.length = NSStatusItem.variableLength
+    }
+
+    private func sanitizedPersistenceValue(_ persistenceValue: String) -> String {
+        statusItemDisplayDescriptors.contains { $0.persistenceValue == persistenceValue } ? persistenceValue : "icon"
+    }
+
+    private func updateStatusItemMenuSelection() {
+        for item in statusItemMenu.items {
+            guard let persistenceValue = item.representedObject as? String else { continue }
+            item.state = persistenceValue == selectedStatusItemDisplayPersistenceValue ? .on : .off
+        }
+    }
+
+    @objc private func selectStatusItemDisplayMode(_ sender: NSMenuItem) {
+        guard let persistenceValue = sender.representedObject as? String else { return }
+
+        selectedStatusItemDisplayPersistenceValue = sanitizedPersistenceValue(persistenceValue)
+        AppSettings.statusItemDisplayMode = selectedStatusItemDisplayPersistenceValue
+        updateStatusItemMenuSelection()
+
+        guard let statusItem = presentationController?.statusItem else { return }
+        applyStatusItemDisplay(metrics: lastMetrics, to: statusItem)
+    }
+
+    private var selectedStatusItemDisplayDescriptor: StatusItemDisplayDescriptor? {
+        statusItemDisplayDescriptors.first { $0.persistenceValue == selectedStatusItemDisplayPersistenceValue }
+    }
+
+    private func makeStatusItemDisplayDescriptors(metrics: Metrics) -> [StatusItemDisplayDescriptor] {
+        var descriptors = [
+            StatusItemDisplayDescriptor(
+                displayName: "Icon",
+                persistenceValue: "icon",
+                getValue: { _ in nil },
+                formatValue: { _ in "" }
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "System power",
+                persistenceValue: "systemPower",
+                getValue: { metrics in Double(metrics.power.board) },
+                formatValue: formatStatusItemPower
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "Chip power",
+                persistenceValue: "chipPower",
+                getValue: { metrics in Double(metrics.power.package) },
+                formatValue: formatStatusItemPower
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "Temperature",
+                persistenceValue: "maxTemperature",
+                getValue: { metrics in Double(max(metrics.temperature.cpuAverage, metrics.temperature.gpuAverage)) },
+                formatValue: formatStatusItemTemperature
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "CPU load",
+                persistenceValue: "totalCpuLoad",
+                getValue: { metrics in
+                    let totalUnits = metrics.cpu_usage.reduce(0) { $0 + Int($1.units) }
+                    let weightedUsage = metrics.cpu_usage.reduce(0 as Float) { $0 + ($1.usage * Float($1.units)) }
+                    return totalUnits > 0 ? Double(weightedUsage / Float(totalUnits)) : 0
+                },
+                formatValue: formatStatusItemUsage
+            ),
+        ]
+
+        descriptors += metrics.cpu_usage.enumerated().flatMap { index, cluster in
+            [
+                StatusItemDisplayDescriptor(
+                    displayName: "\(cluster.name) load",
+                    persistenceValue: "cpuClusterLoad:\(index)",
+                    getValue: { metrics in
+                        guard metrics.cpu_usage.indices.contains(index) else { return nil }
+                        return Double(metrics.cpu_usage[index].usage)
+                    },
+                    formatValue: formatStatusItemUsage
+                ),
+                StatusItemDisplayDescriptor(
+                    displayName: "\(cluster.name) frequency",
+                    persistenceValue: "cpuClusterFrequency:\(index)",
+                    getValue: { metrics in
+                        guard metrics.cpu_usage.indices.contains(index) else { return nil }
+                        return Double(metrics.cpu_usage[index].frequencyMHz) / 1000.0
+                    },
+                    formatValue: formatStatusItemFrequency
+                ),
+            ]
+        }
+
+        return descriptors
+    }
+    @objc private func quitApplication() {
+        NSApp.terminate(nil)
     }
 }
 
