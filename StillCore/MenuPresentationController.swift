@@ -192,7 +192,9 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
 
     private func showStatusItemMenu() {
         guard let statusItemMenu else { return }
-        statusItemStorage.popUpMenu(statusItemMenu)
+        let selector = NSSelectorFromString("popUpStatusItemMenu:")
+        guard statusItemStorage.responds(to: selector) else { return }
+        _ = statusItemStorage.perform(selector, with: statusItemMenu)
     }
 
     // Hide window on focus loss in attached mode
