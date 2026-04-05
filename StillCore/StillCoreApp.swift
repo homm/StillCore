@@ -587,7 +587,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func formatStatusItemTemperature(_ value: Double) -> String {
-        String(format: "%4.1f C", locale: FormatLocale.posix, value)
+        String(format: "%2.0f °C", locale: FormatLocale.posix, value)
     }
 
     private func formatStatusItemUsage(_ value: Double) -> String {
@@ -596,6 +596,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func formatStatusItemFrequency(_ valueGHz: Double) -> String {
         String(format: "%4.2f GHz", locale: FormatLocale.posix, valueGHz)
+    }
+
+    private func formatStatusItemMemoryGb(_ valueGb: Double) -> String {
+        String(format: "%4.1f Gb", locale: FormatLocale.posix, valueGb)
     }
 
     private func applyStatusItemTitle(_ title: String, to statusItem: NSStatusItem) {
@@ -728,6 +732,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ),
             ]
         }
+
+        descriptors += [
+            StatusItemDisplayDescriptor(
+                displayName: "RAM used",
+                persistenceValue: "ramUsed",
+                getValue: { metrics in Double(metrics.memory.ramUsage) / 1_073_741_824.0 },
+                formatValue: formatStatusItemMemoryGb
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "RAM load",
+                persistenceValue: "ramLoad",
+                getValue: { metrics in
+                    guard metrics.memory.ramTotal > 0 else { return 0 }
+                    return Double(metrics.memory.ramUsage) / Double(metrics.memory.ramTotal)
+                },
+                formatValue: formatStatusItemUsage
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "Swap used",
+                persistenceValue: "swapUsed",
+                getValue: { metrics in Double(metrics.memory.swapUsage) / 1_073_741_824.0 },
+                formatValue: formatStatusItemMemoryGb
+            ),
+        ]
 
         return descriptors
     }
