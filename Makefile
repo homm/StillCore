@@ -1,12 +1,22 @@
 NAME := StillCore
-PROJECT := $(NAME).xcodeproj
+LOCAL ?=
+WORKSPACE ?=
 CONFIGURATION ?= Debug
-DERIVED_DATA ?= .build
-MACMON_XCFRAMEWORK_PATH ?= ../../macmon/dist/CMacmon.xcframework
-export MACMON_XCFRAMEWORK_PATH
+DERIVED_DATA := .build
 XCODEBUILD_FLAGS := \
 	-quiet -hideShellScriptEnvironment \
 	ENABLE_CODE_COVERAGE=NO
+
+ifneq ($(LOCAL),)
+    WORKSPACE := $(NAME).local
+    MACMON_XCFRAMEWORK_PATH := ../macmon/dist/CMacmon.xcframework
+    export MACMON_XCFRAMEWORK_PATH
+endif
+
+XCODE_CONTAINER := -project $(NAME).xcodeproj
+ifneq ($(WORKSPACE),)
+    XCODE_CONTAINER := -workspace $(WORKSPACE).xcworkspace
+endif
 
 PRODUCTS_DIR = $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)
 APP_PATH = $(PRODUCTS_DIR)/$(NAME).app
@@ -19,18 +29,19 @@ PROFILE_TEMPLATE ?= Time Profiler
 .PHONY: help app run open-app helper-restart benchmarks profile clean
 
 help:
-		@printf '%s\n' \
-			'make app            Build $(NAME).app' \
-			'make run            Build and run $(NAME) in this terminal' \
-			'make open-app       Build and open $(NAME).app' \
-			'make helper-restart Build app and restart battery helper' \
-			'make profile        Build $(NAME) and launch xctrace Time Profiler' \
-			'make benchmarks     Run charts benchmarks' \
-			'make clean          Remove $(DERIVED_DATA)' \
-			'MACMON_XCFRAMEWORK_PATH=... overrides the macmon xcframework used by SwiftPM (default: ../../macmon/dist/CMacmon.xcframework)'
+	@printf '%s\n' \
+		'make app            Build $(NAME).app' \
+		'LOCAL=1 make app    Build with local workspace and local macmon xcframework' \
+		'WORKSPACE=StillCore.local make app Build with local workspace override' \
+		'make run            Build and run $(NAME) in this terminal' \
+		'make open-app       Build and open $(NAME).app' \
+		'make helper-restart Build app and restart battery helper' \
+		'make profile        Build $(NAME) and launch xctrace Time Profiler' \
+		'make benchmarks     Run charts benchmarks' \
+		'make clean          Remove .build'
 
 app:
-	xcodebuild -project $(PROJECT) build \
+	xcodebuild $(XCODE_CONTAINER) build \
 	-scheme $(NAME) -configuration $(CONFIGURATION) \
 	-derivedDataPath $(DERIVED_DATA) \
 	$(XCODEBUILD_FLAGS)

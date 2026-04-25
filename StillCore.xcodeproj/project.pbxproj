@@ -191,7 +191,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B0A000052E5A000100000001 /* XCRemoteSwiftPackageReference "Charts" */,
-				B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon-bindings/swift" */,
+				B0A000022E5A000100000001 /* XCRemoteSwiftPackageReference "macmon-bindings" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AF9513E62E59D8B900550A10 /* Products */;
@@ -503,14 +503,15 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon-bindings/swift" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../macmon-bindings/swift;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
+		B0A000022E5A000100000001 /* XCRemoteSwiftPackageReference "macmon-bindings" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/homm/macmon-bindings.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		B0A000052E5A000100000001 /* XCRemoteSwiftPackageReference "Charts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ChartsOrg/Charts.git";
@@ -524,7 +525,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		B0A000032E5A000100000001 /* MacmonSwift */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B0A000022E5A000100000001 /* XCLocalSwiftPackageReference "../macmon-bindings/swift" */;
+			package = B0A000022E5A000100000001 /* XCRemoteSwiftPackageReference "macmon-bindings" */;
 			productName = MacmonSwift;
 		};
 		B0A000062E5A000100000001 /* DGCharts */ = {
