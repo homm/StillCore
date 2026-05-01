@@ -458,6 +458,8 @@ private struct MetricsDGChartView: NSViewRepresentable {
         if chartView.data !== controller.data {
             chartView.data = controller.data
             chartView.yMaxStabilizer.reset()
+            configureLegend(chartView)
+            configureAxes(chartView)
         }
 
         (chartView.marker as? MetricsDetailsMarkerView)?.chartView = chartView
@@ -466,8 +468,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
         chartView.data?.notifyDataChanged()
 
-        configureLegend(chartView)
-        configureAxes(chartView)
+        configureAxisRanges(chartView)
         chartView.notifyDataSetChanged()
         chartView.applySharedHighlight(highlightedSampleX)
     }
@@ -495,15 +496,13 @@ private struct MetricsDGChartView: NSViewRepresentable {
 
     private func configureAxes(_ chartView: MetricsLineChartView) {
         let xAxis = chartView.xAxis
-        xAxis.axisMinimum = Double(controller.rightBoundary - capacity + 1)
-        // Visual compensation for drawing outside of edge
-        xAxis.axisMaximum = Double(controller.rightBoundary) + 0.1
+        xAxis.enabled = true
+        xAxis.drawLabelsEnabled = false
+        xAxis.drawAxisLineEnabled = false
+        xAxis.drawGridLinesEnabled = false
 
         let leftAxis = chartView.leftAxis
         leftAxis.enabled = true
-        leftAxis.axisMinimum = yStart
-        leftAxis.axisMaximum = getYMax(chartView)
-
         leftAxis.drawLabelsEnabled = true
         leftAxis.setLabelCount(yAxisLabelCount, force: false)
         leftAxis.drawAxisLineEnabled = false
@@ -515,14 +514,21 @@ private struct MetricsDGChartView: NSViewRepresentable {
         leftAxis.zeroLineDashLengths = nil
     }
 
-    private func getYMax(_ chartView: MetricsLineChartView) -> Double {
-        let visibleMinX = chartView.lowestVisibleX
-        let visibleMaxX = chartView.highestVisibleX
+    private func configureAxisRanges(_ chartView: MetricsLineChartView) {
+        let visibleMinX = Double(controller.rightBoundary - capacity + 1)
+        let visibleMaxX = Double(controller.rightBoundary)
+
+        chartView.xAxis.axisMinimum = visibleMinX
+        // Visual compensation for drawing outside of edge
+        chartView.xAxis.axisMaximum = visibleMaxX + 0.1
+
         controller.data?.calcMinMaxY(fromX: visibleMinX, toX: visibleMaxX)
 
         let rawVisibleYMax = controller.data?.getYMax(axis: .left) ?? yStart
         let visibleHeight = max(0, rawVisibleYMax - yStart)
-        return chartView.yMaxStabilizer.update(height: visibleHeight) + yStart
+        chartView.leftAxis.axisMinimum = yStart
+        chartView.leftAxis.axisMaximum =
+            chartView.yMaxStabilizer.update(height: visibleHeight) + yStart
     }
 
     private func configureLegend(_ chartView: LineChartView) {
