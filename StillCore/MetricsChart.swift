@@ -312,7 +312,6 @@ final class MetricsLineChartView: LineChartView {
         spaceTop: 0.05
     )
     var series: [MetricsSeriesDescriptor] = []
-    fileprivate var schemaDataSetIndices: [Int] = []
     var clearHighlight: (() -> Void)?
 
     override init(frame: CGRect) {
@@ -438,8 +437,6 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.extraTopOffset = 8
         chartView.extraBottomOffset = 4
         chartView.extraRightOffset = 40
-        chartView.series = controller.series
-        chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
         chartView.clearHighlight = { highlightedSampleX = nil }
         chartView.delegate = context.coordinator
 
@@ -458,40 +455,16 @@ private struct MetricsDGChartView: NSViewRepresentable {
         if chartView.data !== controller.data {
             chartView.data = controller.data
             chartView.yMaxStabilizer.reset()
+            chartView.series = controller.series
             configureLegend(chartView)
             configureAxes(chartView)
         }
 
-        (chartView.marker as? MetricsDetailsMarkerView)?.chartView = chartView
-        chartView.clearHighlight = { highlightedSampleX = nil }
-        chartView.series = controller.series
-        chartView.schemaDataSetIndices = makeSchemaDataSetIndices()
         chartView.data?.notifyDataChanged()
 
         configureAxisRanges(chartView)
         chartView.notifyDataSetChanged()
         chartView.applySharedHighlight(highlightedSampleX)
-    }
-
-    private func makeSchemaDataSetIndices() -> [Int] {
-        let fillIndices = controller.series.enumerated().compactMap { index, descriptor in
-            descriptor.kind == .fill ? index : nil
-        }
-        let lineIndices = controller.series.enumerated().compactMap { index, descriptor in
-            descriptor.kind == .line ? index : nil
-        }
-
-        var dataSetIndices = Array(repeating: 0, count: controller.series.count)
-
-        for (drawIndex, seriesIndex) in fillIndices.enumerated() {
-            dataSetIndices[seriesIndex] = drawIndex
-        }
-
-        for (offset, seriesIndex) in lineIndices.reversed().enumerated() {
-            dataSetIndices[seriesIndex] = fillIndices.count + offset
-        }
-
-        return dataSetIndices
     }
 
     private func configureAxes(_ chartView: MetricsLineChartView) {
