@@ -390,6 +390,8 @@ struct ContentView: View {
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var highlightedChartSampleX: Double?
+    @State private var showIntervalKeyboardHint = false
+    @State private var hasShownIntervalKeyboardHint = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -473,18 +475,28 @@ struct ContentView: View {
             HStack(spacing: 4) {
                 Text("Interval:")
                 Text(intervalLabel)
-                Button("–") {
-                    dependencies.decreaseMetricsInterval()
+                HStack(spacing: 4) {
+                    Button("–") {
+                        dependencies.decreaseMetricsInterval()
+                    }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut("-", modifiers: [])
+                        .simultaneousGesture(TapGesture().onEnded(showIntervalHint))
+                    Text("/")
+                        .foregroundStyle(.secondary)
+                    Button("+") {
+                        dependencies.increaseMetricsInterval()
+                    }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut("=", modifiers: [])
+                        .simultaneousGesture(TapGesture().onEnded(showIntervalHint))
                 }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut("-", modifiers: [])
-                Text("/")
-                    .foregroundStyle(.secondary)
-                Button("+") {
-                    dependencies.increaseMetricsInterval()
+                .popover(isPresented: $showIntervalKeyboardHint, arrowEdge: .top) {
+                    Text("Keyboard shortcuts: - and +")
+                        .font(.system(size: 12))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                 }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut("=", modifiers: [])
                 Spacer()
             }
 
@@ -529,6 +541,17 @@ struct ContentView: View {
             return "\(interval) ms"
         }
         return String(format: "%.2f s", locale: FormatLocale.posix, Double(interval) / 1000.0)
+    }
+
+    private func showIntervalHint() {
+        guard !hasShownIntervalKeyboardHint else { return }
+
+        hasShownIntervalKeyboardHint = true
+        showIntervalKeyboardHint = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            showIntervalKeyboardHint = false
+        }
     }
 }
 
