@@ -99,6 +99,11 @@ final class AppDependencies: ObservableObject {
     private(set) var socInfo: SocInfo?
     private var metricsTask: Task<Void, Never>?
     private let metricsSubject = PassthroughSubject<Metrics, Never>()
+    @Published private(set) var chartHistoryResetRevision = 0
+
+    func clearChartHistory() {
+        chartHistoryResetRevision += 1
+    }
 
     var metricsPublisher: AnyPublisher<Metrics, Never> {
         metricsSubject.eraseToAnyPublisher()
@@ -528,6 +533,10 @@ struct ContentView: View {
                         dependencies.increaseMetricsInterval()
                     }
                         .keyboardShortcut("=", modifiers: [])
+                    Button("Clear Chart History") {
+                        dependencies.clearChartHistory()
+                    }
+                        .keyboardShortcut("k", modifiers: .command)
                 } label: {
                     HStack(spacing: 0) {
                         Image(systemName: "clock.arrow.circlepath")
@@ -576,6 +585,7 @@ struct ContentView: View {
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
+                            historyResetRevision: dependencies.chartHistoryResetRevision,
                             highlightedSampleX: $highlightedChartSampleX
                         )
                             .frame(height: metrics.size.height * 0.35)
@@ -587,6 +597,7 @@ struct ContentView: View {
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
+                            historyResetRevision: dependencies.chartHistoryResetRevision,
                             highlightedSampleX: $highlightedChartSampleX,
                             settingsInvalidationKey: AnyHashable(dependencies.frequencyUsageByCores),
                             settingsView: AnyView(
@@ -606,6 +617,7 @@ struct ContentView: View {
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
+                            historyResetRevision: dependencies.chartHistoryResetRevision,
                             highlightedSampleX: $highlightedChartSampleX,
                             yAxisLabelCount: 4,
                             yStart: 30
@@ -871,6 +883,10 @@ struct MainApp: App {
             CommandGroup(replacing: .appSettings) {}
             CommandGroup(after: .toolbar) {
                 Divider()
+                Button("Clear Chart History") {
+                    AppDependencies.shared.clearChartHistory()
+                }
+                    .keyboardShortcut("k", modifiers: .command)
                 Button("Decrease Update Interval") {
                     AppDependencies.shared.decreaseMetricsInterval()
                 }

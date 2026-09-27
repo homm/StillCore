@@ -181,6 +181,13 @@ final class ChartDataController {
         }
     }
 
+    func clearHistory() {
+        dataSets.forEach { dataSet in
+            dataSet.removeFirst(max(0, dataSet.count - 1))
+        }
+        updateSinglePointAppearance(series: series)
+    }
+
     func visibleYMax(fromX: Double, toX: Double, fallback: Double) -> Double {
         var yMax = fallback
 
@@ -228,6 +235,11 @@ final class MetricsChartStore: ObservableObject {
         if showUpdates {
             chartRevision += 1
         }
+    }
+
+    func clearHistory() {
+        controller.clearHistory()
+        chartRevision += 1
     }
 
     private func append(_ metrics: Metrics) {
@@ -629,6 +641,7 @@ struct MetricsChartSection: View {
     let definition: MetricsChartDefinition
     let capacity: Int
     let showUpdates: Bool
+    let historyResetRevision: Int
     @Binding var highlightedSampleX: Double?
     let yAxisLabelCount: Int
     let yStart: Double
@@ -648,6 +661,7 @@ struct MetricsChartSection: View {
         metricsPublisher: AnyPublisher<Metrics, Never>,
         capacity: Int,
         showUpdates: Bool,
+        historyResetRevision: Int,
         highlightedSampleX: Binding<Double?>,
         yAxisLabelCount: Int = 5,
         yStart: Double = 0.0,
@@ -657,6 +671,7 @@ struct MetricsChartSection: View {
         self.definition = definition
         self.capacity = capacity
         self.showUpdates = showUpdates
+        self.historyResetRevision = historyResetRevision
         self._highlightedSampleX = highlightedSampleX
         self.yAxisLabelCount = yAxisLabelCount
         self.yStart = yStart
@@ -709,6 +724,11 @@ struct MetricsChartSection: View {
             if newValue {
                 yMaxResetRevision += 1
             }
+        }
+        .onChange(of: historyResetRevision) { _, _ in
+            highlightedSampleX = nil
+            store.clearHistory()
+            yMaxResetRevision += 1
         }
     }
 
