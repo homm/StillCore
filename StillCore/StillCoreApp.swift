@@ -99,6 +99,7 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsTask: Task<Void, Never>?
+    private var lastCPUPower: Float?
     private let metricsSubject = PassthroughSubject<Metrics, Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
@@ -118,6 +119,7 @@ final class AppDependencies: ObservableObject {
     func startMetricsLoop() {
         guard metricsTask == nil else { return }
         metricsError = ""
+        lastCPUPower = nil
 
         metricsTask = Task.detached {
             let clock = ContinuousClock()
@@ -146,10 +148,7 @@ final class AppDependencies: ObservableObject {
 
                     let metrics = try sampler.metrics()
                     await MainActor.run {
-                        AppDependencies.shared.metricsSubject.send(metrics)
-                        if !AppDependencies.shared.metricsError.isEmpty {
-                            AppDependencies.shared.metricsError = ""
-                        }
+                        AppDependencies.shared.publish(metrics)
                     }
                 }
             } catch {
@@ -158,6 +157,21 @@ final class AppDependencies: ObservableObject {
                     AppDependencies.shared.metricsTask = nil
                 }
             }
+        }
+    }
+
+    private func publish(_ source: Metrics) {
+        var metrics = source
+        // A chip spike after zero CPU can include stale energy; retain GPU power only.
+        if metrics.power.package > metrics.power.board && (lastCPUPower == nil || lastCPUPower == 0) {
+            metrics.power.package = metrics.power.gpu
+            metrics.power.cpu = 0
+            metrics.power.ane = 0
+        }
+        lastCPUPower = metrics.power.cpu
+        metricsSubject.send(metrics)
+        if !metricsError.isEmpty {
+            metricsError = ""
         }
     }
 
