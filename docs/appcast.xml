@@ -3,6 +3,40 @@
     <channel>
         <title>StillCore</title>
         <item>
+            <title>1.4.0</title>
+            <pubDate>Mon, 28 Sep 2026 15:12:31 +0000</pubDate>
+            <sparkle:version>202609281558</sparkle:version>
+            <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[
+
+## Hardware and software compatibility
+
+* Added support for new CPU topologies, including Performance and Super core configurations.
+* Fixed CPU frequency detection on M5 and newer chips.
+* Expanded CPU and GPU temperature sensor coverage.
+* Hardware detection now uses native system APIs where available, avoiding a system_profiler call at startup.
+* Added an optional background service to restore CPU power updates on macOS 27. Requires administrator approval and stops when StillCore quits.
+* Fixed the floating window opening behind other apps on macOS Tahoe.
+* Adjusted energy mode menu positioning on macOS Tahoe and macOS 27.
+
+## Energy mode switching
+
+* Click the battery indicator in the app window to switch between Automatic and Power Save modes for the current power source.
+* Added guided permission setup for switching modes without repeated password prompts.
+
+## General improvements
+
+* Added Cmd+K to clear chart history while keeping the latest sample.
+* Made battery tracker setup and service status clearer.
+* Released StillCore under the MIT License.
+
+[Full Changelog](https://github.com/homm/StillCore/compare/v1.3.0...v1.4.0)
+]]></description>
+            <enclosure url="https://github.com/homm/StillCore/releases/download/v1.4.0/StillCore.dmg" length="2571359" type="application/octet-stream" sparkle:edSignature="Qi3siM8XqXeu79DSBNlZUoy/KRMKhaRVonQoOL8g4YWEOGRX6FjeYOjRq+OzmBt/tUgdS0S8xf8lvfN/cTjkAQ=="/>
+        </item>
+        <item>
             <title>1.3.0</title>
             <pubDate>Sun, 31 May 2026 12:28:23 +0000</pubDate>
             <sparkle:version>202605311622</sparkle:version>
