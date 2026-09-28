@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import ServiceManagement
 import MacmonSwift
 import Sparkle
 
@@ -98,7 +99,13 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsTask: Task<Void, Never>?
+    private var lastCPUPower: Float?
     private let metricsSubject = PassthroughSubject<Metrics, Never>()
+    @Published private(set) var chartHistoryResetRevision = 0
+
+    func clearChartHistory() {
+        chartHistoryResetRevision += 1
+    }
 
     var metricsPublisher: AnyPublisher<Metrics, Never> {
         metricsSubject.eraseToAnyPublisher()
@@ -112,6 +119,7 @@ final class AppDependencies: ObservableObject {
     func startMetricsLoop() {
         guard metricsTask == nil else { return }
         metricsError = ""
+        lastCPUPower = nil
 
         metricsTask = Task.detached {
             let clock = ContinuousClock()
@@ -140,10 +148,7 @@ final class AppDependencies: ObservableObject {
 
                     let metrics = try sampler.metrics()
                     await MainActor.run {
-                        AppDependencies.shared.metricsSubject.send(metrics)
-                        if !AppDependencies.shared.metricsError.isEmpty {
-                            AppDependencies.shared.metricsError = ""
-                        }
+                        AppDependencies.shared.publish(metrics)
                     }
                 }
             } catch {
@@ -152,6 +157,21 @@ final class AppDependencies: ObservableObject {
                     AppDependencies.shared.metricsTask = nil
                 }
             }
+        }
+    }
+
+    private func publish(_ source: Metrics) {
+        var metrics = source
+        // A chip spike after zero CPU can include stale energy; retain GPU power only.
+        if metrics.power.package > metrics.power.board && (lastCPUPower == nil || lastCPUPower == 0) {
+            metrics.power.package = metrics.power.gpu
+            metrics.power.cpu = 0
+            metrics.power.ane = 0
+        }
+        lastCPUPower = metrics.power.cpu
+        metricsSubject.send(metrics)
+        if !metricsError.isEmpty {
+            metricsError = ""
         }
     }
 
@@ -498,9 +518,11 @@ When usage is at 100%, the area reaches the line.
 struct ContentView: View {
     @ObservedObject private var dependencies = AppDependencies.shared
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
+    @ObservedObject private var powerMetricsService = PowerMetricsService.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var highlightedChartSampleX: Double?
     @State private var isBatteryTrackerPopoverPresented = false
+    @State private var isPowerMetricsPopoverPresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
     var body: some View {
@@ -528,6 +550,10 @@ struct ContentView: View {
                         dependencies.increaseMetricsInterval()
                     }
                         .keyboardShortcut("=", modifiers: [])
+                    Button("Clear Chart History") {
+                        dependencies.clearChartHistory()
+                    }
+                        .keyboardShortcut("k", modifiers: .command)
                 } label: {
                     HStack(spacing: 0) {
                         Image(systemName: "clock.arrow.circlepath")
@@ -576,10 +602,28 @@ struct ContentView: View {
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
+                            historyResetRevision: dependencies.chartHistoryResetRevision,
                             highlightedSampleX: $highlightedChartSampleX
                         )
                             .frame(height: metrics.size.height * 0.35)
                             .background(backgroundColor)
+                            .overlay(alignment: .topTrailing) {
+                                if powerMetricsService.status != .running {
+                                    Button {
+                                        isPowerMetricsPopoverPresented.toggle()
+                                    } label: {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundStyle(.orange)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("CPU Power Updates")
+                                    .popover(isPresented: $isPowerMetricsPopoverPresented, arrowEdge: .top) {
+                                        PowerMetricsPopover(service: powerMetricsService)
+                                    }
+                                    .offset(y: -4)
+                                }
+                            }
                             .padding(chartSectionInsets)
 
                         MetricsChartSection(
@@ -587,6 +631,7 @@ struct ContentView: View {
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
+                            historyResetRevision: dependencies.chartHistoryResetRevision,
                             highlightedSampleX: $highlightedChartSampleX,
                             settingsInvalidationKey: AnyHashable(dependencies.frequencyUsageByCores),
                             settingsView: AnyView(
@@ -606,6 +651,7 @@ struct ContentView: View {
                             metricsPublisher: dependencies.metricsPublisher,
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
+                            historyResetRevision: dependencies.chartHistoryResetRevision,
                             highlightedSampleX: $highlightedChartSampleX,
                             yAxisLabelCount: 4,
                             yStart: 30
@@ -654,7 +700,7 @@ struct ContentView: View {
                         .textSelection(.enabled)
                         .foregroundStyle(.secondary)
 
-                    if batteryTrackerService.actionTitle != nil {
+                    if batteryTrackerService.status != .running {
                         Button {
                             isBatteryTrackerPopoverPresented.toggle()
                         } label: {
@@ -687,23 +733,79 @@ struct ContentView: View {
         @ObservedObject var service: BatteryTrackerService
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(service.runtimeLabel)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Track Battery Usage")
+                    .font(.headline)
 
-                if !service.lastErrorMessage.isEmpty {
-                    Text(service.lastErrorMessage)
+                Text("StillCore can run a lightweight background service to track battery drain during each unplugged session, even while the app is closed.")
+
+                if let errorMessage = service.errorMessage {
+                    Text(errorMessage)
                         .textSelection(.enabled)
                         .foregroundStyle(.secondary)
                 }
 
-                if let actionTitle = service.actionTitle {
-                    Button(actionTitle) {
-                        service.performPrimaryAction()
+                switch service.status {
+                case .stopped:
+                    Button("Start Service") { Task { await service.start() } }
+                case .requiresApproval:
+                    Text(
+                        "Approve StillCore in System Settings → General → Login Items & Extensions."
+                    ).foregroundStyle(.secondary)
+                    Button("Open System Settings") { SMAppService.openSystemSettingsLoginItems() }
+                case .starting:
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Starting battery tracker…")
                     }
+                case .running:
+                    EmptyView()
                 }
             }
             .padding(12)
+            .frame(width: 340, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private struct PowerMetricsPopover: View {
+        @ObservedObject var service: PowerMetricsService
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("CPU Power Updates on macOS 27")
+                    .font(.headline)
+                Text("On macOS 27, CPU power readings can stop updating for third-party apps. Running Apple's powermetrics tool in the background restores updates.")
+
+                if let errorMessage = service.errorMessage {
+                    Text(errorMessage)
+                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                }
+
+                switch service.status {
+                case .stopped:
+                    Text(
+                        "Enabling this workaround requires administrator approval in System Settings. It adds a small amount of CPU and energy use, runs at background priority, and stops when StillCore quits."
+                    ).foregroundStyle(.secondary)
+                    Button("Start Service") { Task { await service.start() } }
+                case .requiresApproval:
+                    Text(
+                        "Approve StillCore in System Settings → General → Login Items & Extensions."
+                    ).foregroundStyle(.secondary)
+                    Button("Open System Settings") { SMAppService.openSystemSettingsLoginItems() }
+                case .starting:
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Starting CPU power updates…")
+                    }
+                case .running:
+                    EmptyView()
+                }
+            }
+            .padding(12)
+            .frame(width: 340, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -744,19 +846,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusItemMenu = NSMenu()
     private var statusItemController: StatusItemController?
     private var updaterController: SPUStandardUpdaterController?
-    private let restartHelperArgument = "--helper-restart"
-    private let uninstallHelperArgument = "--helper-uninstall"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if CommandLine.arguments.contains(restartHelperArgument) {
-            BatteryTrackerService.shared.restartHelper()
-            NSApp.terminate(nil)
-            return
-        }
-
-        if CommandLine.arguments.contains(uninstallHelperArgument) {
-            BatteryTrackerService.shared.uninstallHelper()
-            NSApp.terminate(nil)
+        if CommandLine.arguments.contains("--helpers-uninstall") {
+            Task {
+                let services: [(String, SMAppService)] = [
+                    ("Battery tracker", .agent(plistName: BatteryTrackerConstants.launchAgentPlistName)),
+                    ("CPU power", .daemon(plistName: PowerMetricsConstants.plistName)),
+                ]
+                var failed = false
+                for (name, service) in services {
+                    if service.status == .notRegistered || service.status == .notFound { continue }
+                    do {
+                        try await service.unregister()
+                    } catch {
+                        fputs("Could not uninstall \(name) helper: \(error)\n", stderr)
+                        failed = true
+                    }
+                }
+                exit(failed ? EXIT_FAILURE : EXIT_SUCCESS)
+            }
             return
         }
 
@@ -765,6 +874,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+
+        _ = BatteryTrackerService.shared
+        _ = PowerMetricsService.shared
 
         let aboutItem = NSMenuItem(title: "About...", action: #selector(showAboutPanel), keyEquivalent: "")
         aboutItem.target = self
@@ -871,6 +983,10 @@ struct MainApp: App {
             CommandGroup(replacing: .appSettings) {}
             CommandGroup(after: .toolbar) {
                 Divider()
+                Button("Clear Chart History") {
+                    AppDependencies.shared.clearChartHistory()
+                }
+                    .keyboardShortcut("k", modifiers: .command)
                 Button("Decrease Update Interval") {
                     AppDependencies.shared.decreaseMetricsInterval()
                 }

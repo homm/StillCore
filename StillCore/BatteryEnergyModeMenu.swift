@@ -40,7 +40,9 @@ final class BatteryEnergyModeMenuController: NSObject {
         popUpCell.menu = menu
         popUpCell.select(selectedItem)
         var cellFrame = anchorView.bounds
-        if #available(macOS 26.0, *) {
+        if #available(macOS 27.0, *) {
+            cellFrame = cellFrame.offsetBy(dx: 6, dy: -1)  // Borderless
+        } else if #available(macOS 26.0, *) {
             // cellFrame = cellFrame.offsetBy(dx: 1, dy: 1)  // Bordered
             cellFrame = cellFrame.offsetBy(dx: 5, dy: -1)  // Borderless
         } else {
@@ -198,7 +200,7 @@ final class BatteryEnergyModeMenuController: NSObject {
                 return result
             }
             await MainActor.run {
-                BatteryTrackerService.shared.refreshRuntimeState()
+                BatteryTrackerService.shared.refresh()
             }
             return result
         }.value

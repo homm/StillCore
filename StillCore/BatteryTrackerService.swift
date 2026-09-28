@@ -3,13 +3,6 @@ import Combine
 import Foundation
 import ServiceManagement
 
-@MainActor
-enum BatteryTrackerInstallState: Equatable {
-    case notInstalled
-    case requiresApproval
-    case installed
-}
-
 enum BatteryChargeStatus {
     case charging
     case onHold
@@ -50,20 +43,11 @@ struct BatteryRuntimeState {
 }
 
 @MainActor
-final class BatteryTrackerService: ObservableObject {
+final class BatteryTrackerService: HelperService {
     static let isBatteryAvailable = BatteryStatus.isAvailable
-    static let shared = BatteryTrackerService(start: isBatteryAvailable)
-    private static let refreshInterval: TimeInterval = 3
-    private static var currentHelperVersion: String {
-        let infoDictionary = Bundle.main.infoDictionary
-        return (infoDictionary?["CFBundleShortVersionString"] as? String)
-            ?? (infoDictionary?["CFBundleVersion"] as? String)
-            ?? "1"
-    }
-
-    @Published private(set) var installState: BatteryTrackerInstallState = .notInstalled
+    static let shared = BatteryTrackerService()
     @Published private(set) var runtimeState: BatteryRuntimeState?
-    @Published private(set) var lastErrorMessage: String = ""
+    private var runtimeError: String?
 
     // Lets non-SwiftUI code observe runtimeState without exposing write access.
     var runtimeStatePublisher: AnyPublisher<BatteryRuntimeState?, Never> {
@@ -71,80 +55,43 @@ final class BatteryTrackerService: ObservableObject {
     }
 
     private let store = BatterySessionStore()
-    private let service = SMAppService.agent(plistName: BatteryTrackerConstants.launchAgentPlistName)
-    private var timer: Timer?
-    private var pendingRefreshWorkItem: DispatchWorkItem?
 
-    private init(start: Bool) {
-        guard start else { return }
-        refreshAll()
-        restartHelperIfVersionChanged()
-        startPolling()
+    private init() {
+        super.init(service: .agent(plistName: BatteryTrackerConstants.launchAgentPlistName),
+                   helperName: "BatteryTrackerHelper")
     }
 
-    func installHelper() {
-        do {
-            try service.register()
-            lastErrorMessage = ""
-        } catch {
-            lastErrorMessage = "Install failed: \(error.localizedDescription)"
-        }
-        refreshAll()
-        scheduleFollowUpRefresh()
+    override func initialize() {
+        if !Self.isBatteryAvailable { return }
+        super.initialize()
     }
 
-    func restartHelper(removingState: Bool = false) {
-        do {
-            if service.status != .notRegistered && service.status != .notFound {
-                try service.unregister()
+    override func ensureRunning() async throws {
+        // A record left by the old process cannot confirm this launch.
+        let previousHeartbeat = try? store.load()?.heartbeatAt
+        let deadline = ContinuousClock.now + .seconds(15)
+        while status == .starting && isRegistered {
+            let state: BatteryTrackerState?
+            do {
+                state = try store.load()
+            } catch {
+                throw HelperFailure("State read failed: \(error.localizedDescription)")
             }
-            if removingState {
-                try store.delete()
+            if let error = state?.lastError { throw HelperFailure(error) }
+            if state?.isRunning(after: previousHeartbeat) == true {
+                refresh()
+                return
             }
-            try service.register()
-            lastErrorMessage = ""
-        } catch {
-            lastErrorMessage = "Restart failed: \(error.localizedDescription)"
+            if ContinuousClock.now >= deadline {
+                throw HelperFailure("The battery tracker did not update its heartbeat. Try starting it again.")
+            }
+            try await Task.sleep(for: .milliseconds(100))
         }
-        refreshAll()
-        scheduleFollowUpRefresh()
+        throw CancellationError()
     }
 
-    func restartHelperIfVersionChanged() {
-        guard installState == .installed, let batteryTrackerState = runtimeState?.batteryTrackerState else {
-            return
-        }
-        guard batteryTrackerState.helperVersion != Self.currentHelperVersion else {
-            return
-        }
-
-        restartHelper()
-    }
-
-    func uninstallHelper() {
-        do {
-            try service.unregister()
-            lastErrorMessage = ""
-        } catch {
-            lastErrorMessage = "Uninstall failed: \(error.localizedDescription)"
-        }
-        refreshAll()
-    }
-
-    func refreshHelperStatus() {
-        switch service.status {
-        case .enabled:
-            installState = .installed
-        case .requiresApproval:
-            installState = .requiresApproval
-        case .notRegistered, .notFound:
-            installState = .notInstalled
-        @unknown default:
-            installState = .notInstalled
-        }
-    }
-
-    func refreshRuntimeState() {
+    override func refresh() {
+        super.refresh()
         var batteryTrackerState: BatteryTrackerState?
         var stateReadError: String?
         var batteryStatusReadError: String?
@@ -165,46 +112,33 @@ final class BatteryTrackerService: ObservableObject {
             batteryStatusReadError = "Battery read failed: \(error.localizedDescription)"
         }
 
-        if let stateReadError {
-            lastErrorMessage = stateReadError
-        } else if let batteryStatusReadError {
-            lastErrorMessage = batteryStatusReadError
-        } else if let persistedError = batteryTrackerState?.lastError {
-            lastErrorMessage = persistedError
-        } else if !lastErrorMessage.hasPrefix("Install failed:") && !lastErrorMessage.hasPrefix("Uninstall failed:") {
-            lastErrorMessage = ""
+        let previousRuntimeError = runtimeError
+        runtimeError = stateReadError ?? batteryStatusReadError ?? batteryTrackerState?.lastError
+        if previousRuntimeError != nil && errorMessage == previousRuntimeError && runtimeError == nil {
+            errorMessage = nil
         }
-    }
 
-    var runtimeLabel: String {
-        switch installState {
-        case .notInstalled:
-            return "Battery tracker is not installed"
-        case .requiresApproval:
-            return "Helper requires approval"
-        case .installed:
-            guard let batteryTrackerState = runtimeState?.batteryTrackerState else {
-                return "Battery tracker is not running"
+        if isRegistered && status != .starting {
+            if let helperError = stateReadError ?? batteryTrackerState?.lastError {
+                if status != .stopped || errorMessage != helperError { reportFailure(helperError) }
+            } else if batteryTrackerState?.isRunning() == true {
+                // A recovered agent needs no new start request.
+                if status == .stopped {
+                    errorMessage = nil
+                    status = .running
+                }
+            } else if status == .running {
+                reportFailure("The battery tracker stopped updating its heartbeat. Try starting it again.")
             }
-
-            let heartbeatAge = Date().timeIntervalSince(batteryTrackerState.heartbeatAt)
-            guard heartbeatAge <= BatteryTrackerConstants.heartbeatTimeout else {
-                return "Battery tracker is not running"
-            }
-
-            if batteryTrackerState.lastError != nil {
-                return "Helper running with errors"
-            }
-
-            return "Helper running"
         }
+        if let runtimeError, errorMessage != runtimeError { errorMessage = runtimeError }
     }
 
     var statusText: String {
         guard let runtimeState else { return "Helper not running" }
 
         if
-            isHelperRunning,
+            status == .running,
             let session = runtimeState.batteryTrackerState?.session,
             let activeSeconds = runtimeState.activeSeconds,
             let usedPercent = runtimeState.usedPercent
@@ -222,78 +156,11 @@ final class BatteryTrackerService: ObservableObject {
         return chargeStatusText(runtimeState.chargeStatus)
     }
 
-    var actionTitle: String? {
-        switch installState {
-        case .notInstalled:
-            return "Install"
-        case .requiresApproval:
-            return "Open System Settings"
-        case .installed:
-            if !lastErrorMessage.isEmpty {
-                return "Restart Helper"
-            }
-            return isHelperRunning ? nil : "Start Helper"
-        }
-    }
-
-    func performPrimaryAction() {
-        switch installState {
-        case .notInstalled:
-            installHelper()
-        case .requiresApproval:
-            openSystemSettings()
-        case .installed:
-            restartHelper()
-        }
-    }
-
-    func openSystemSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") else {
-            return
-        }
-        NSWorkspace.shared.open(url)
-    }
-
     func openBatterySettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") else {
             return
         }
         NSWorkspace.shared.open(url)
-    }
-
-    private func startPolling() {
-        timer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) {
-            [weak self] _ in
-            Task { @MainActor in
-                self?.refreshAll()
-            }
-        }
-    }
-
-    private func refreshAll() {
-        refreshHelperStatus()
-        refreshRuntimeState()
-    }
-
-    private func scheduleFollowUpRefresh(delay: TimeInterval = 1) {
-        pendingRefreshWorkItem?.cancel()
-
-        let workItem = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                self?.refreshAll()
-            }
-        }
-        pendingRefreshWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
-    }
-
-    private var isHelperRunning: Bool {
-        guard installState == .installed, let batteryTrackerState = runtimeState?.batteryTrackerState else {
-            return false
-        }
-
-        let heartbeatAge = Date().timeIntervalSince(batteryTrackerState.heartbeatAt)
-        return heartbeatAge <= BatteryTrackerConstants.heartbeatTimeout && batteryTrackerState.lastError == nil
     }
 
     private func formatDuration(_ seconds: Int) -> String {

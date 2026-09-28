@@ -96,12 +96,6 @@ Build and open the app bundle:
 make open-app
 ```
 
-Rebuild the app and restart the battery helper if it is already registered:
-
-```sh
-make helper-restart
-```
-
 Launch Instruments Time Profiler for a Release build:
 
 ```sh

@@ -1,5 +1,5 @@
 {
-  "originHash" : "1af5d26b8fa56a3ffc9d49c79de9eb3f77f94de4543493c0f2c86d7901fd06f2",
+  "originHash" : "2f11a57b2a5a9bacc998a878886714ec51516d8576d61e4f7bad63af24bc64b0",
   "pins" : [
     {
       "identity" : "charts",
@@ -15,8 +15,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/homm/macmon-bindings.git",
       "state" : {
-        "revision" : "bbcaabe1d31385f06f27f8a16181e13f4eb0fa3b",
-        "version" : "0.7.2"
+        "revision" : "1fb95db059c81736be37c6b5de5939e0b1c5c33c"
       }
     },
     {
