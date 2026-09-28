@@ -200,7 +200,7 @@ final class BatteryEnergyModeMenuController: NSObject {
                 return result
             }
             await MainActor.run {
-                BatteryTrackerService.shared.refreshRuntimeState()
+                BatteryTrackerService.shared.refresh()
             }
             return result
         }.value

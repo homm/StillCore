@@ -12,6 +12,8 @@
 		B0A000012E5A000100000001 /* MacmonSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B0A000032E5A000100000001 /* MacmonSwift */; };
 		B0A000042E5A000100000001 /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = B0A000062E5A000100000001 /* DGCharts */; };
 		B0A000072E5A000100000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B0A000092E5A000100000001 /* Sparkle */; };
+		AF3C00012F00000100000001 /* PowerMetricsHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = AF3C00022F00000100000001 /* PowerMetricsHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		AF3C000A2F00000100000001 /* PowerMetrics daemon plist */ = {isa = PBXBuildFile; fileRef = AF3C00092F00000100000001 /* PowerMetrics daemon plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -22,6 +24,7 @@
 			dstSubfolderSpec = 1;
 			files = (
 				AF2B00012F00000100000001 /* BatteryTrackerHelper in CopyFiles */,
+				AF3C00012F00000100000001 /* PowerMetricsHelper in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -44,12 +47,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 		};
+		AF3C000B2F00000100000001 /* Copy LaunchDaemon */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchDaemons;
+			dstSubfolderSpec = 1;
+			files = (AF3C000A2F00000100000001 /* PowerMetrics daemon plist */, );
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AF9513E52E59D8B900550A10 /* StillCore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StillCore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF2B00022F00000100000001 /* BatteryTrackerHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BatteryTrackerHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF2B00092F00000100000001 /* com.github.homm.StillCore.BatteryTracker.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = BatteryTrackerLaunchAgent/com.github.homm.StillCore.BatteryTracker.plist; sourceTree = "<group>"; };
+		AF3C00022F00000100000001 /* PowerMetricsHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PowerMetricsHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF3C00092F00000100000001 /* PowerMetrics daemon plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PowerMetricsLaunchDaemon/com.github.homm.StillCore.PowerMetrics.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -68,6 +81,8 @@
 			path = StillCore;
 			sourceTree = "<group>";
 		};
+		AF3C00032F00000100000001 /* PowerMetricsHelper */ = {isa = PBXFileSystemSynchronizedRootGroup; path = PowerMetricsHelper; sourceTree = "<group>"; };
+		AF3C00042F00000100000001 /* PowerMetricsShared */ = {isa = PBXFileSystemSynchronizedRootGroup; path = PowerMetricsShared; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,6 +103,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AF3C00072F00000100000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +114,9 @@
 				AF2B00042F00000100000001 /* BatteryTrackingShared */,
 				AF2B00032F00000100000001 /* BatteryTrackerHelper */,
 				AF2B00092F00000100000001 /* com.github.homm.StillCore.BatteryTracker.plist */,
+				AF3C00032F00000100000001 /* PowerMetricsHelper */,
+				AF3C00042F00000100000001 /* PowerMetricsShared */,
+				AF3C00092F00000100000001 /* PowerMetrics daemon plist */,
 				AF9513E62E59D8B900550A10 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,11 +126,20 @@
 			children = (
 				AF9513E52E59D8B900550A10 /* StillCore.app */,
 				AF2B00022F00000100000001 /* BatteryTrackerHelper */,
+				AF3C00022F00000100000001 /* PowerMetricsHelper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		AF3C00122F00000100000001 = {isa = PBXContainerItemProxy; containerPortal = AF9513DD2E59D8B900550A10; proxyType = 1; remoteGlobalIDString = AF3C00052F00000100000001; remoteInfo = PowerMetricsHelper; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		AF3C00132F00000100000001 /* PowerMetricsHelper dependency */ = {isa = PBXTargetDependency; target = AF3C00052F00000100000001; targetProxy = AF3C00122F00000100000001; };
+/* End PBXTargetDependency section */
 
 /* Begin PBXNativeTarget section */
 		AF9513E42E59D8B900550A10 /* StillCore */ = {
@@ -123,15 +151,17 @@
 				AF9513E32E59D8B900550A10 /* Resources */,
 				AFFC83242E59E0410095EE6D /* CopyFiles */,
 				AF2B000B2F00000100000001 /* Copy LaunchAgent */,
-				AF2B00112F00000100000001 /* Configure LaunchAgent */,
+				AF3C000B2F00000100000001 /* Copy LaunchDaemon */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AF3C00132F00000100000001 /* PowerMetricsHelper dependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AF9513E72E59D8B900550A10 /* StillCore */,
 				AF2B00042F00000100000001 /* BatteryTrackingShared */,
+				AF3C00042F00000100000001 /* PowerMetricsShared */,
 			);
 			name = StillCore;
 			packageProductDependencies = (
@@ -164,6 +194,19 @@
 			);
 			productName = BatteryTrackerHelper;
 			productReference = AF2B00022F00000100000001 /* BatteryTrackerHelper */;
+			productType = "com.apple.product-type.tool";
+		};
+		AF3C00052F00000100000001 /* PowerMetricsHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AF3C00102F00000100000001;
+			buildPhases = (AF3C00062F00000100000001, AF3C00072F00000100000001, );
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (AF3C00032F00000100000001, AF3C00042F00000100000001, );
+			name = PowerMetricsHelper;
+			packageProductDependencies = ();
+			productName = PowerMetricsHelper;
+			productReference = AF3C00022F00000100000001;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -205,6 +248,7 @@
 			targets = (
 				AF9513E42E59D8B900550A10 /* StillCore */,
 				AF2B00052F00000100000001 /* BatteryTrackerHelper */,
+				AF3C00052F00000100000001 /* PowerMetricsHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -218,29 +262,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		AF2B00112F00000100000001 /* Configure LaunchAgent */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Configure LaunchAgent";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -e\nplist=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents/com.github.homm.StillCore.BatteryTracker.plist\"\nplutil -replace Label -string \"$BATTERY_TRACKER_LAUNCH_AGENT_LABEL\" \"$plist\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 
 /* Begin PBXSourcesBuildPhase section */
 		AF2B00062F00000100000001 /* Sources */ = {
@@ -257,6 +278,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AF3C00062F00000100000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -387,10 +409,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
-				BATTERY_TRACKER_LAUNCH_AGENT_LABEL = com.github.homm.StillCore.Debug.BatteryTracker;
 				CODE_SIGN_ENTITLEMENTS = StillCore/StillCore.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202609271606;
+				CURRENT_PROJECT_VERSION = 202609281503;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -428,10 +449,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
-				BATTERY_TRACKER_LAUNCH_AGENT_LABEL = com.github.homm.StillCore.BatteryTracker;
 				CODE_SIGN_ENTITLEMENTS = StillCore/StillCore.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202609271606;
+				CURRENT_PROJECT_VERSION = 202609281503;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -467,13 +487,13 @@
 			buildSettings = {
 				ARCHS = arm64;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202609271606;
+				CURRENT_PROJECT_VERSION = 202609281503;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore.Debug.BatteryTrackerHelper;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore.BatteryTrackerHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
@@ -486,13 +506,50 @@
 				ARCHS = arm64;
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202609271606;
+				CURRENT_PROJECT_VERSION = 202609281503;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore.BatteryTrackerHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		AF3C000E2F00000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 202609281503;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore.PowerMetricsHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		AF3C000F2F00000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 202609281503;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.homm.StillCore.PowerMetricsHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
@@ -529,6 +586,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		AF3C00102F00000100000001 = {isa = XCConfigurationList; buildConfigurations = (AF3C000E2F00000100000001, AF3C000F2F00000100000001, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */

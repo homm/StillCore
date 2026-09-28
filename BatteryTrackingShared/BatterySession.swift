@@ -1,19 +1,9 @@
 import Foundation
 
 enum BatteryTrackerConstants {
-    private static let helperBundleIdentifierSuffix = ".BatteryTrackerHelper"
-
-    static var launchAgentLabel: String {
-        return "\(stateDirectoryName).BatteryTracker"
-    }
+    static let launchAgentLabel = "com.github.homm.StillCore.BatteryTracker"
     static let launchAgentPlistName = "com.github.homm.StillCore.BatteryTracker.plist"
-    static var stateDirectoryName: String {
-        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.github.homm.StillCore"
-        if bundleIdentifier.hasSuffix(helperBundleIdentifierSuffix) {
-            return String(bundleIdentifier.dropLast(helperBundleIdentifierSuffix.count))
-        }
-        return bundleIdentifier
-    }
+    static let stateDirectoryName = "com.github.homm.StillCore"
     static let stateFilename = "battery-tracker-state.json"
     static let heartbeatTimeout: TimeInterval = 15
 }
@@ -32,6 +22,14 @@ struct BatteryTrackerState: Codable {
     var heartbeatAt: Date = .distantPast
     var session: BatteryTrackerSession?
     var lastError: String?
+
+    func isRunning(after heartbeat: Date? = nil) -> Bool {
+        if lastError != nil || Date().timeIntervalSince(heartbeatAt) > BatteryTrackerConstants.heartbeatTimeout {
+            return false
+        }
+        if let heartbeat { return heartbeatAt > heartbeat }
+        return true
+    }
 }
 
 struct BatterySessionStore {

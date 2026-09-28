@@ -33,14 +33,14 @@ help:
 		'LOCAL=1 make app    Build with local workspace and local macmon xcframework' \
 		'make run            Build and run $(NAME) in this terminal' \
 		'make open-app       Build and open $(NAME).app' \
+		'make helpers-uninstall Build app and uninstall both helpers' \
 		'make release        Build Release, create $(NAME).dmg, submit for notarization' \
 		'  DEVELOPMENT_TEAM=... Team id for Developer ID signing' \
 		'  NOTARY_PROFILE=... Keychain profile for notarytool (default: $(NOTARY_PROFILE))' \
 		'make dmg            Build Release, create $(NAME).dmg suitable for local running (ad-hoc)' \
-		'make helper-restart Build app and restart battery helper' \
-		'make helper-uninstall Build app and uninstall battery helper' \
 		'make profile        Build $(NAME) and launch xctrace Time Profiler' \
 		'make benchmarks     Run charts benchmarks' \
+		'make test           Build app and run automated checks without root' \
 		'make install-hooks  Use repo-managed git hooks' \
 		'make clean          Remove .build'
 
@@ -61,13 +61,9 @@ run: app
 open-app: app
 	open "$(APP_PATH)"
 
-.PHONY: helper-restart
-helper-restart: app
-	"$(APP_EXEC_PATH)" --helper-restart
-
-.PHONY: helper-uninstall
-helper-uninstall: app
-	"$(APP_EXEC_PATH)" --helper-uninstall
+.PHONY: helpers-uninstall
+helpers-uninstall: app
+	"$(APP_EXEC_PATH)" --helpers-uninstall
 
 .PHONY: benchmarks
 benchmarks:
@@ -78,6 +74,21 @@ benchmarks:
 .PHONY: install-hooks
 install-hooks:
 	git config core.hooksPath .githooks
+
+.PHONY: test
+test: app
+	xcrun swiftc -swift-version 6 -parse-as-library \
+		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
+		PowerMetricsShared/PowerMetricsProtocol.swift \
+		PowerMetricsHelper/PowerMetricsEngine.swift \
+		StillCore/HelperService.swift \
+		StillCore/PowerMetricsService.swift \
+		BatteryTrackingShared/BatterySession.swift \
+		Tests/PowerMetricsChecks.swift \
+		-o $(DERIVED_DATA)/PowerMetricsChecks
+	$(DERIVED_DATA)/PowerMetricsChecks "$(APP_PATH)"
+	/bin/zsh -c 'exec -a Contents/MacOS/PowerMetricsHelper "$$1" "$$2"' \
+		-- "$(DERIVED_DATA)/PowerMetricsChecks" "$(APP_PATH)"
 
 .PHONY: profile
 PROFILE_TRACE ?= $(DERIVED_DATA)/$(NAME)-Time-Profiler.trace
