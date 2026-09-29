@@ -2,7 +2,9 @@ import AppKit
 import Combine
 import SwiftUI
 import DGCharts
+#if !STILLCORE_INTEL
 import MacmonSwift
+#endif
 
 struct MetricsSeriesDescriptor {
     enum Kind {

@@ -106,9 +106,24 @@ final class BatteryEnergyModeMenuController: NSObject {
 
         Task {
             if await Self.runEnergyModeCommand(command).isSudoFailure {
-                if continueSudoersAlert() {
+                let rule = Self.sudoersLine
+                if SudoersPermissionAlert.confirm(
+                    title: "Need permission to change Energy Mode",
+                    rule: rule
+                ) {
                     if await Self.runEnergyModeCommand(command).isSudoFailure {
-                        _ = await Self.runSudoersInstallScript(Self.sudoersInstallScript(), retrying: command)
+                        switch await SudoersPermissionAlert.install(rule: rule) {
+                        case .success:
+                            _ = await Self.runEnergyModeCommand(command)
+                        case .cancelled:
+                            break
+                        case .failure(let output):
+                            Self.showCommandFailureAlert(
+                                title: "Permission setup failed",
+                                command: SudoersPermissionAlert.command(rule: rule),
+                                output: output
+                            )
+                        }
                     }
                 }
             }
@@ -139,15 +154,6 @@ final class BatteryEnergyModeMenuController: NSObject {
 
         var isSudoFailure: Bool {
             exitCode == 1 && output.hasPrefix("sudo: ")
-        }
-    }
-
-    private struct SudoersInstallResult: Sendable {
-        let exitCode: Int32
-        let output: String
-
-        var isUserCancelled: Bool {
-            exitCode == 1 && output.contains("(-128)")
         }
     }
 
@@ -206,61 +212,6 @@ final class BatteryEnergyModeMenuController: NSObject {
         }.value
     }
 
-    private nonisolated static func runSudoersInstallScript(
-        _ script: String,
-        retrying command: EnergyModeCommand
-    ) async -> SudoersInstallResult {
-        await Task.detached {
-            let process = Process()
-            let pipe = Pipe()
-
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = [
-                "-e",
-                "do shell script \"\(script)\" with administrator privileges",
-            ]
-            process.standardOutput = pipe
-            process.standardError = pipe
-
-            let result: SudoersInstallResult
-            do {
-                try process.run()
-                process.waitUntilExit()
-                let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                result = SudoersInstallResult(exitCode: process.terminationStatus, output: output)
-            } catch {
-                result = SudoersInstallResult(exitCode: -1, output: error.localizedDescription)
-            }
-
-            if result.exitCode != 0 {
-                if !result.isUserCancelled {
-                    await MainActor.run {
-                        showCommandFailureAlert(
-                            title: "Permission setup failed",
-                            command: sudoersInstallCommand(),
-                            output: result.output
-                        )
-                    }
-                }
-                return result
-            }
-
-            _ = await runEnergyModeCommand(command)
-            return result
-        }.value
-    }
-
-    private func continueSudoersAlert() -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "Need permission to change Energy Mode"
-        alert.informativeText = "StillCore will run this command, or you can run it manually in Terminal:"
-        alert.accessoryView = makeCommandAccessoryView(command: Self.sudoersInstallCommand())
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Continue")
-        alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn
-    }
-
     private static func showCommandFailureAlert(title: String, command: String, output: String) {
         let alert = NSAlert()
         alert.messageText = title
@@ -276,55 +227,7 @@ final class BatteryEnergyModeMenuController: NSObject {
         alert.runModal()
     }
 
-    private static func sudoersInstallCommand() -> String {
-        "sudo sh -c \"\(sudoersInstallScript())\""
-    }
-
-    private static func sudoersInstallScript() -> String {
-        let sudoersLine = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset -[bc] lowpowermode [01]"
-        let sudoersPath = "/etc/sudoers.d/stillcore-\(getuid())"
-        return "echo '\(sudoersLine)' > \(sudoersPath) && chmod 440 \(sudoersPath)"
-    }
-
-    private func makeCommandAccessoryView(command: String) -> NSView {
-        let width: CGFloat = 320
-        let textField = SelectingCommandTextField(wrappingLabelWithString: command)
-
-        textField.frame.size.width = width
-        textField.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        textField.alignment = .left
-        textField.drawsBackground = true
-        textField.isSelectable = true
-        textField.lineBreakMode = .byWordWrapping
-        textField.maximumNumberOfLines = 0
-        textField.cell?.wraps = true
-        textField.cell?.usesSingleLineMode = false
-        textField.frame.size.height = ceil(textField.cell?.cellSize(forBounds: NSRect(
-            x: 0, y: 0, width: width, height: .greatestFiniteMagnitude
-        )).height ?? 100)
-
-        return textField
-    }
-
-}
-
-private final class SelectingCommandTextField: NSTextField {
-    override var acceptsFirstResponder: Bool {
-        true
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        guard super.becomeFirstResponder() else {
-            return false
-        }
-
-        if let editor = currentEditor() {
-            editor.perform(#selector(NSText.selectAll(_:)), with: self, afterDelay: 0.0)
-        }
-        return true
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        currentEditor()?.selectAll(nil)
+    private static var sudoersLine: String {
+        "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset -[bc] lowpowermode [01]"
     }
 }

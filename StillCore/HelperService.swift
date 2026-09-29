@@ -177,7 +177,8 @@ class HelperService: ObservableObject {
     func fingerprint() throws -> String {
         if cachedFingerprint == nil {
             var hash = SHA256()
-            for path in ["Contents/MacOS/\(helperName)", "Contents/MacOS/StillCore"] {
+            let appName = Bundle(url: bundleURL)?.executableURL?.lastPathComponent ?? "StillCore"
+            for path in ["Contents/MacOS/\(helperName)", "Contents/MacOS/\(appName)"] {
                 hash.update(data: Data(SHA256.hash(data: try Data(contentsOf: bundleURL.appendingPathComponent(path)))))
             }
             cachedFingerprint = hash.finalize().map { String(format: "%02x", $0) }.joined()

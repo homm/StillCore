@@ -58,6 +58,16 @@ During development, I paid attention to StillCore's own footprint. The table bel
 
 Building from source requires Xcode with Swift 6 support and network access for Swift Package dependencies.
 
+For an Intel Mac, build the Intel version of StillCore (`StillCore-intel.app`)
+with `make app-intel` and run `make test-intel` for its parser and permission
+checks. This build uses Apple's `powermetrics` for package power and CPU
+frequency/usage. It retains the battery tracker and menu bar interface, but
+has no temperature, GPU, or system power charts. On first launch it can request
+administrator approval to install a limited `sudoers` rule for `powermetrics`.
+
+Use `make run-intel` to build and run it in the terminal, or `make dmg-intel`
+to create a local Release `StillCore-intel.dmg`.
+
 Create a local DMG from source:
 
 ```sh

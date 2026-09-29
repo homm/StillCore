@@ -2,7 +2,6 @@ NAME := StillCore
 LOCAL ?=
 WORKSPACE ?=
 CONFIGURATION ?= Debug
-DESTINATION ?= platform=macOS,arch=arm64
 DERIVED_DATA := .build
 XCODEBUILD_FLAGS := \
 	-quiet -hideShellScriptEnvironment \
@@ -25,19 +24,25 @@ endif
 
 APP_PATH = $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)/$(NAME).app
 APP_EXEC_PATH = $(APP_PATH)/Contents/MacOS/$(NAME)
+INTEL_APP_PATH = $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)/StillCore-intel.app
+INTEL_APP_EXEC_PATH = $(INTEL_APP_PATH)/Contents/MacOS/StillCore-intel
 
 .PHONY: help
 help:
 	@printf '%s\n' \
 		'make app            Build $(NAME).app' \
+		'make app-intel      Build StillCore for Intel (StillCore-intel.app)' \
+		'make test-intel     Build Intel app and check parsing, permissions and process lifecycle' \
 		'LOCAL=1 make app    Build with local workspace and local macmon xcframework' \
 		'make run            Build and run $(NAME) in this terminal' \
+		'make run-intel      Build and run StillCore for Intel in this terminal' \
 		'make open-app       Build and open $(NAME).app' \
 		'make helpers-uninstall Build app and uninstall both helpers' \
 		'make release        Build Release, create $(NAME).dmg, submit for notarization' \
 		'  DEVELOPMENT_TEAM=... Team id for Developer ID signing' \
 		'  NOTARY_PROFILE=... Keychain profile for notarytool (default: $(NOTARY_PROFILE))' \
 		'make dmg            Build Release, create $(NAME).dmg suitable for local running (ad-hoc)' \
+		'make dmg-intel      Build Release, create StillCore-intel.dmg for local running' \
 		'make profile        Build $(NAME) and launch xctrace Time Profiler' \
 		'make benchmarks     Run charts benchmarks' \
 		'make test           Build app and run automated checks without root' \
@@ -49,13 +54,55 @@ help:
 app:
 	xcodebuild $(XCODE_CONTAINER) build \
 	-scheme $(NAME) -configuration $(CONFIGURATION) \
-	-destination '$(DESTINATION)' \
 	-derivedDataPath $(DERIVED_DATA) \
 	$(XCODEBUILD_FLAGS)
+
+.PHONY: app-intel
+app-intel:
+	xcodebuild -project $(NAME).xcodeproj build \
+		-scheme StillCore-intel -configuration $(CONFIGURATION) \
+		-destination 'platform=macOS,arch=x86_64' \
+		-derivedDataPath $(DERIVED_DATA) \
+		$(XCODEBUILD_FLAGS)
+
+.PHONY: test-intel
+test-intel: app-intel
+	xcrun swiftc -swift-version 6 -parse-as-library \
+		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
+		StillCoreIntel/IntelMetrics.swift Tests/IntelMetricsChecks.swift \
+		-o $(DERIVED_DATA)/IntelMetricsChecks
+	$(DERIVED_DATA)/IntelMetricsChecks
+	xcrun swiftc -swift-version 6 -parse-as-library \
+		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
+		StillCoreIntel/IntelMetrics.swift StillCoreIntel/IntelPowerMetricsService.swift \
+		StillCore/SudoersPermissionAlert.swift \
+		Tests/IntelPermissionChecks.swift -o $(DERIVED_DATA)/IntelPermissionChecks
+	$(DERIVED_DATA)/IntelPermissionChecks
+	xcrun swiftc -swift-version 6 -parse-as-library \
+		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
+		StillCoreIntel/IntelMetrics.swift StillCoreIntel/IntelPowerMetricsService.swift \
+		StillCore/SudoersPermissionAlert.swift \
+		Tests/IntelProcessChecks.swift -o $(DERIVED_DATA)/IntelProcessChecks
+	$(DERIVED_DATA)/IntelProcessChecks
 
 .PHONY: run
 run: app
 	$(APP_EXEC_PATH)
+
+.PHONY: run-intel
+run-intel: app-intel
+	$(INTEL_APP_EXEC_PATH)
+
+.PHONY: dmg-intel
+dmg-intel: CONFIGURATION=Release
+dmg-intel: app-intel
+	rm -rf "$(DERIVED_DATA)/dmg-intel"
+	mkdir -p "$(DERIVED_DATA)/dmg-intel"
+	ln -s /Applications "$(DERIVED_DATA)/dmg-intel/Applications"
+	cp -R "$(INTEL_APP_PATH)" "$(DERIVED_DATA)/dmg-intel/"
+	hdiutil create -volname "StillCore" \
+		-srcfolder "$(DERIVED_DATA)/dmg-intel" \
+		-ov -format UDZO "StillCore-intel.dmg"
 
 .PHONY: open-app
 open-app: app
@@ -119,7 +166,6 @@ archive:
 	rm -rf "$(_ARCHIVE_PATH)"
 	xcodebuild $(XCODE_CONTAINER) archive \
 		-scheme $(NAME) -configuration Release \
-		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED_DATA) \
 		-archivePath "$(_ARCHIVE_PATH)" \
 		$(XCODEBUILD_FLAGS)
