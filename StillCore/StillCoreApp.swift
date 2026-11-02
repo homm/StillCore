@@ -435,14 +435,14 @@ When usage is at 100%, the area reaches the line.
 
     private static func gpuFrequencySeries() -> [MetricsSeriesDescriptor] {
         let color = MetricsChartPalette.gpuFrequencyPalette[0]
+        let minimumFrequency = AppDependencies.shared.socInfo?.gpuFreqs.first { $0 > 0 } ?? 0
         return [
             MetricsSeriesDescriptor(
                 title: "GPU",
                 color: color,
                 kind: .line,
                 chartValue: { metrics in
-                    // TODO: Cache min value
-                    Double(gpuChartFrequencyMHz(metrics)) / 1000
+                    Double(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
                 },
                 detailsFormatter: Formatters.frequencyGHz,
                 detailsGroup: "gpu.0"
@@ -453,7 +453,7 @@ When usage is at 100%, the area reaches the line.
                 kind: .fill,
                 chartValue: { metrics in
                     Double(metrics.gpuActiveRatio)
-                        * Double(gpuChartFrequencyMHz(metrics)) / 1000
+                        * Double(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
                 },
                 detailsValue: { metrics in
                     Double(metrics.gpuActiveRatio)
@@ -473,15 +473,6 @@ When usage is at 100%, the area reaches the line.
         return 1
     }
 
-    private static func gpuChartFrequencyMHz(_ metrics: Metrics) -> UInt32 {
-        let frequency = metrics.gpuFreqMHz
-        if frequency == 0,
-            let minimumFrequency = AppDependencies.shared.socInfo?.gpuFreqs.first
-        {
-            return minimumFrequency
-        }
-        return frequency
-    }
 }
 
 // MARK: - SwiftUI content for the popover/window
