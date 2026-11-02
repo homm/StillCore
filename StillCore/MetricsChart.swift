@@ -221,11 +221,9 @@ final class MetricsChartStore: ObservableObject {
     ) {
         self.definition = definition
         self.capacity = capacity
-        self.metricsSubscription = metricsPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] metrics in
-                self?.append(metrics)
-            }
+        self.metricsSubscription = metricsPublisher.sink { [weak self] metrics in
+            self?.append(metrics)
+        }
     }
 
     func setShowUpdates(_ showUpdates: Bool) {
