@@ -194,7 +194,7 @@ final class AppDependencies: ObservableObject {
         var parts = info.cpuTiers.map { tier in
             "\(tier.cores)\(tier.label)"
         }
-        parts.append("\(info.gpuCores)G cores")
+        parts.append("\(info.gpuCores)G")
         return parts.joined(separator: " ")
     }
 
@@ -515,8 +515,10 @@ struct ContentView: View {
                     Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
                         .font(.headline)
                 }
-                Text(dependencies.socSummary)
-                    .foregroundStyle(.secondary)
+                if !dependencies.socSummary.isEmpty {
+                    Text(presentationState.mode == .attached ? "\(dependencies.socSummary) cores" : dependencies.socSummary)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Menu {
                     Text("Update interval:")
@@ -569,6 +571,7 @@ struct ContentView: View {
                     Image(systemName: "power")
                 }
             }
+            .padding(.leading, presentationState.mode == .floating ? 76 : 0)
 
             if !dependencies.metricsError.isEmpty {
                 Text("Macmon error: \(dependencies.metricsError)")
@@ -825,16 +828,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ContentView(presentationState: presentationState)
             },
             statusItemMenu: statusItemMenu,
-            configureWindow: { window, presentationMode in
+            configureWindow: { window in
                 window.title = AppPresentation.floatingWindowTitle
                 window.setContentSize(AppPresentation.windowMinSize)
-
-                switch presentationMode {
-                case .attached:
-                    window.contentMinSize = AppPresentation.windowMinSize
-                case .floating:
-                    window.minSize = AppPresentation.windowMinSize
-                }
+                window.contentMinSize = AppPresentation.windowMinSize
             }
         )
 

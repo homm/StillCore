@@ -86,7 +86,7 @@ private final class FloatingWindow: NSWindow {
     init() {
         super.init(
             contentRect: .zero,
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -94,6 +94,11 @@ private final class FloatingWindow: NSWindow {
         isReleasedWhenClosed = false
         collectionBehavior = [.moveToActiveSpace, .fullScreenNone]
         tabbingMode = .disallowed
+        titleVisibility = .hidden
+        titlebarAppearsTransparent = true
+        toolbar = NSToolbar(identifier: "FloatingWindowToolbar")
+        toolbarStyle = .unifiedCompact
+        showsToolbarButton = false
     }
 }
 
@@ -114,7 +119,7 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
     init(
         @ViewBuilder content: @escaping ContentBuilder,
         statusItemMenu: NSMenu? = nil,
-        configureWindow: ((NSWindow, PresentationMode) -> Void)? = nil
+        configureWindow: ((NSWindow) -> Void)? = nil
     ) {
         hostingView = NSHostingView(rootView: AnyView(content(presentationState)))
         hostingView.sizingOptions = []
@@ -131,8 +136,8 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
 
         attachedWindow.delegate = self
         floatingWindow.delegate = self
-        configureWindow?(attachedWindow, .attached)
-        configureWindow?(floatingWindow, .floating)
+        configureWindow?(attachedWindow)
+        configureWindow?(floatingWindow)
         configureStatusItemAction()
 
         presentationState.onModeChange = { [weak self] in
