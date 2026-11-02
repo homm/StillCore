@@ -99,7 +99,6 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsTask: Task<Void, Never>?
-    private var lastCPUPower: Float?
     private let metricsSubject = PassthroughSubject<Metrics, Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
@@ -119,7 +118,6 @@ final class AppDependencies: ObservableObject {
     func startMetricsLoop() {
         guard metricsTask == nil else { return }
         metricsError = ""
-        lastCPUPower = nil
 
         metricsTask = Task.detached {
             let clock = ContinuousClock()
@@ -162,13 +160,30 @@ final class AppDependencies: ObservableObject {
 
     private func publish(_ source: Metrics) {
         var metrics = source
-        // A chip spike after zero CPU can include stale energy; retain GPU power only.
-        if metrics.power.package > metrics.power.board && (lastCPUPower == nil || lastCPUPower == 0) {
-            metrics.power.package = metrics.power.gpu
-            metrics.power.cpu = 0
-            metrics.power.ane = 0
+        for index in metrics.cpuTiers.indices {
+            var tier = metrics.cpuTiers[index]
+            // Ignore frequencies reported by idle cores when choosing the active peak.
+            var frequency = tier.cores.filter { $0.activeRatio > 0 }.map(\.freqMHz).max() ?? 0
+            // Per-core frequency is averaged over active time. Weight it by active residency
+            // to recover each core's effective frequency over the whole sampling interval.
+            let effectiveFrequency = tier.cores.reduce(0 as Float) {
+                $0 + Float($1.freqMHz) * $1.activeRatio
+            }
+            var coreCount = tier.cores.count
+            if let cpuTiers = socInfo?.cpuTiers, cpuTiers.indices.contains(index) {
+                // Missing sampled cores still count toward the tier's total capacity.
+                coreCount = max(coreCount, Int(cpuTiers[index].cores))
+                // Keep the chart line at a supported frequency during idle intervals.
+                let minimumFrequency = cpuTiers[index].freqs.filter { $0 > 0 }.min() ?? 0
+                frequency = max(frequency, minimumFrequency)
+            }
+            // This ratio represents effective load at the displayed frequency. Multiplying
+            // the two for the chart fill recovers mean effective frequency across all cores.
+            tier.freqMHz = frequency
+            tier.activeRatio = frequency > 0 && coreCount > 0
+                ? effectiveFrequency / (Float(coreCount) * Float(frequency)) : 0
+            metrics.cpuTiers[index] = tier
         }
-        lastCPUPower = metrics.power.cpu
         metricsSubject.send(metrics)
         if !metricsError.isEmpty {
             metricsError = ""
@@ -189,16 +204,8 @@ final class AppDependencies: ObservableObject {
     }
 
     private func formatSocSummary(_ info: SocInfo) -> String {
-        var parts = info.cpuDomains.compactMap { domain -> String? in
-            var name = domain.name.uppercased()
-            let lower = domain.name.lowercased()
-            if lower == "ecpu" {
-                name = "E"
-            }
-            if lower == "pcpu" {
-                name = "P"
-            }
-            return "\(domain.units)\(name)"
+        var parts = info.cpuTiers.map { tier in
+            "\(tier.cores)\(tier.label)"
         }
         parts.append("\(info.gpuCores)G cores")
         return parts.joined(separator: " ")
@@ -286,19 +293,19 @@ private enum MetricsChartPalette {
 @MainActor
 private enum MetricsChartDefinitions {
     private enum Formatters {
-        static func watts(_ value: Double) -> String {
+        static func watts(_ value: Float) -> String {
             String(format: "%.2f", locale: FormatLocale.posix, value)
         }
 
-        static func frequencyGHz(_ value: Double) -> String {
+        static func frequencyGHz(_ value: Float) -> String {
             String(format: "%.2f", locale: FormatLocale.posix, value)
         }
 
-        static func usage(_ value: Double) -> String {
+        static func usage(_ value: Float) -> String {
             String(format: "%.1f%%", locale: FormatLocale.posix, value * 100.0)
         }
 
-        static func temperature(_ value: Double) -> String {
+        static func temperature(_ value: Float) -> String {
             String(format: "%.1f", locale: FormatLocale.posix, value)
         }
     }
@@ -322,35 +329,35 @@ private enum MetricsChartDefinitions {
                     title: "SYS",
                     color: MetricsChartPalette.board,
                     kind: .line,
-                    chartValue: { Double($0.power.board) },
+                    chartValue: { $0.sysPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CHIP",
                     color: MetricsChartPalette.package,
                     kind: .line,
-                    chartValue: { Double($0.power.package) },
+                    chartValue: { $0.chipPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CPU",
                     color: MetricsChartPalette.cpu,
                     kind: .line,
-                    chartValue: { Double($0.power.cpu) },
+                    chartValue: { $0.cpuPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "ANE",
                     color: MetricsChartPalette.ane,
                     kind: .line,
-                    chartValue: { Double($0.power.ane) },
+                    chartValue: { $0.anePower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "GPU",
                     color: MetricsChartPalette.gpu,
                     kind: .line,
-                    chartValue: { Double($0.power.gpu) },
+                    chartValue: { $0.gpuPower },
                     detailsFormatter: Formatters.watts
                 ),
             ]
@@ -369,7 +376,7 @@ private enum MetricsChartDefinitions {
                     color: MetricsChartPalette.cpu,
                     kind: .line,
                     lineWidth: 2.0,
-                    chartValue: { Double($0.temperature.cpuAverage) },
+                    chartValue: { $0.temp.cpuTempAvg },
                     detailsFormatter: Formatters.temperature
                 ),
                 MetricsSeriesDescriptor(
@@ -377,7 +384,7 @@ private enum MetricsChartDefinitions {
                     color: MetricsChartPalette.gpu,
                     kind: .line,
                     lineWidth: 2.0,
-                    chartValue: { Double($0.temperature.gpuAverage) },
+                    chartValue: { $0.temp.gpuTempAvg },
                     detailsFormatter: Formatters.temperature
                 ),
             ]
@@ -399,19 +406,18 @@ When usage is at 100%, the area reaches the line.
 """,
         schemaBuilder: { metrics in
             guard let metrics else { return AnyHashable("frequency.empty") }
-            return AnyHashable(
-                metrics.cpu_usage.map(\.name) + ["|"] + metrics.gpu_usage.map(\.name)
-            )
+            return AnyHashable(metrics.cpuTiers.map(\.label))
         },
         seriesBuilder: { metrics in
             guard let metrics else { return [] }
-            return cpuFrequencySeries(from: metrics) + gpuFrequencySeries(from: metrics)
+            return cpuFrequencySeries(from: metrics) + gpuFrequencySeries()
         }
     )
 
     private static func cpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
-        metrics.cpu_usage.enumerated().flatMap { index, cluster in
-            let title = metrics.cpu_usage.count == 1 ? "CPU" : cluster.name
+        metrics.cpuTiers.enumerated().flatMap { index, cluster in
+            let title = metrics.cpuTiers.count == 1 ? "CPU"
+                : cluster.label.count == 1 ? "\(cluster.label)CPU" : cluster.label
             let color = MetricsChartPalette.cpuFrequencyPalette[
                 index % MetricsChartPalette.cpuFrequencyPalette.count
             ]
@@ -424,7 +430,7 @@ When usage is at 100%, the area reaches the line.
                     color: color,
                     kind: .line,
                     chartValue: { metrics in
-                        Double(cpuChartFrequencyMHz(metrics, index: index)) / 1000
+                        Float(metrics.cpuTiers[index].freqMHz) / 1000
                     },
                     detailsFormatter: Formatters.frequencyGHz,
                     detailsGroup: group
@@ -434,15 +440,15 @@ When usage is at 100%, the area reaches the line.
                     color: color.withAlphaComponent(0.3),
                     kind: .fill,
                     chartValue: { metrics in
-                        Double(metrics.cpu_usage[index].usage)
-                            * Double(cpuChartFrequencyMHz(metrics, index: index)) / 1000
+                        metrics.cpuTiers[index].activeRatio
+                            * Float(metrics.cpuTiers[index].freqMHz) / 1000
                     },
                     detailsValue: { metrics in
-                        Double(metrics.cpu_usage[index].usage)
+                        metrics.cpuTiers[index].activeRatio
                     },
                     detailsFormatter: { usage in
                         Formatters.usage(
-                            usage * (AppDependencies.shared.frequencyUsageByCores ? coreCount : 1)
+                            usage * Float(AppDependencies.shared.frequencyUsageByCores ? coreCount : 1)
                         )
                     },
                     detailsGroup: group
@@ -451,78 +457,55 @@ When usage is at 100%, the area reaches the line.
         }
     }
 
-    private static func gpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
-        metrics.gpu_usage.enumerated().flatMap { index, cluster in
-            let title = metrics.gpu_usage.count == 1 ? "GPU" : cluster.name
-            let color = MetricsChartPalette.gpuFrequencyPalette[
-                index % MetricsChartPalette.gpuFrequencyPalette.count
-            ]
-            let group = "gpu.\(index)"
-
-            return [
-                MetricsSeriesDescriptor(
-                    title: title,
-                    color: color,
-                    kind: .line,
-                    chartValue: { metrics in
-                        Double(gpuChartFrequencyMHz(metrics, index: index)) / 1000
-                    },
-                    detailsFormatter: Formatters.frequencyGHz,
-                    detailsGroup: group
-                ),
-                MetricsSeriesDescriptor(
-                    title: title,
-                    color: color.withAlphaComponent(0.3),
-                    kind: .fill,
-                    chartValue: { metrics in
-                        Double(metrics.gpu_usage[index].usage)
-                            * Double(gpuChartFrequencyMHz(metrics, index: index)) / 1000
-                    },
-                    detailsValue: { metrics in
-                        Double(metrics.gpu_usage[index].usage)
-                    },
-                    detailsFormatter: Formatters.usage,
-                    detailsGroup: group
-                ),
-            ]
-        }
+    private static func gpuFrequencySeries() -> [MetricsSeriesDescriptor] {
+        let color = MetricsChartPalette.gpuFrequencyPalette[0]
+        let minimumFrequency = AppDependencies.shared.socInfo?.gpuFreqs.first { $0 > 0 } ?? 0
+        return [
+            MetricsSeriesDescriptor(
+                title: "GPU",
+                color: color,
+                kind: .line,
+                chartValue: { metrics in
+                    Float(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
+                },
+                detailsFormatter: Formatters.frequencyGHz,
+                detailsGroup: "gpu.0"
+            ),
+            MetricsSeriesDescriptor(
+                title: "GPU",
+                color: color.withAlphaComponent(0.3),
+                kind: .fill,
+                chartValue: { metrics in
+                    metrics.gpuActiveRatio
+                        * Float(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
+                },
+                detailsValue: { metrics in
+                    metrics.gpuActiveRatio
+                },
+                detailsFormatter: Formatters.usage,
+                detailsGroup: "gpu.0"
+            ),
+        ]
     }
 
-    private static func cpuChartFrequencyMHz(_ metrics: Metrics, index: Int) -> UInt32 {
-        let frequency = metrics.cpu_usage[index].frequencyMHz
-        guard frequency == 0,
-            let domains = AppDependencies.shared.socInfo?.cpuDomains,
-            domains.indices.contains(index),
-            let minimumFrequency = domains[index].frequenciesMHz.first
-        else { return frequency }
-        return minimumFrequency
-    }
-
-    private static func cpuChartCoreCount(index: Int) -> Double {
-        guard let domains = AppDependencies.shared.socInfo?.cpuDomains,
+    private static func cpuChartCoreCount(index: Int) -> Float {
+        if let domains = AppDependencies.shared.socInfo?.cpuTiers,
             domains.indices.contains(index)
-        else { return 1 }
-        return Double(domains[index].units)
+        {
+            return Float(domains[index].cores)
+        }
+        return 1
     }
 
-    private static func gpuChartFrequencyMHz(_ metrics: Metrics, index: Int) -> UInt32 {
-        let frequency = metrics.gpu_usage[index].frequencyMHz
-        guard frequency == 0,
-            let minimumFrequency = AppDependencies.shared.socInfo?.gpuFrequenciesMHz.first
-        else { return frequency }
-        return minimumFrequency
-    }
 }
 
 // MARK: - SwiftUI content for the popover/window
 struct ContentView: View {
     @ObservedObject private var dependencies = AppDependencies.shared
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
-    @ObservedObject private var powerMetricsService = PowerMetricsService.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var highlightedChartSampleX: Double?
     @State private var isBatteryTrackerPopoverPresented = false
-    @State private var isPowerMetricsPopoverPresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
     var body: some View {
@@ -607,23 +590,6 @@ struct ContentView: View {
                         )
                             .frame(height: metrics.size.height * 0.35)
                             .background(backgroundColor)
-                            .overlay(alignment: .topTrailing) {
-                                if powerMetricsService.status != .running {
-                                    Button {
-                                        isPowerMetricsPopoverPresented.toggle()
-                                    } label: {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .font(.system(size: 18))
-                                            .foregroundStyle(.orange)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("CPU Power Updates")
-                                    .popover(isPresented: $isPowerMetricsPopoverPresented, arrowEdge: .top) {
-                                        PowerMetricsPopover(service: powerMetricsService)
-                                    }
-                                    .offset(y: -4)
-                                }
-                            }
                             .padding(chartSectionInsets)
 
                         MetricsChartSection(
@@ -768,47 +734,6 @@ struct ContentView: View {
         }
     }
 
-    private struct PowerMetricsPopover: View {
-        @ObservedObject var service: PowerMetricsService
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("CPU Power Updates on macOS 27")
-                    .font(.headline)
-                Text("On macOS 27, CPU power readings can stop updating for third-party apps. Running Apple's powermetrics tool in the background restores updates.")
-
-                if let errorMessage = service.errorMessage {
-                    Text(errorMessage)
-                        .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
-                }
-
-                switch service.status {
-                case .stopped:
-                    Text(
-                        "Enabling this workaround requires administrator approval in System Settings. It adds a small amount of CPU and energy use, runs at background priority, and stops when StillCore quits."
-                    ).foregroundStyle(.secondary)
-                    Button("Start Service") { Task { await service.start() } }
-                case .requiresApproval:
-                    Text(
-                        "Approve StillCore in System Settings → General → Login Items & Extensions."
-                    ).foregroundStyle(.secondary)
-                    Button("Open System Settings") { SMAppService.openSystemSettingsLoginItems() }
-                case .starting:
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("Starting CPU power updates…")
-                    }
-                case .running:
-                    EmptyView()
-                }
-            }
-            .padding(12)
-            .frame(width: 340, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private var intervalLabel: AttributedString {
         Self.intervalLabel(for: dependencies.metricsIntervalMs)
     }
@@ -876,7 +801,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         _ = BatteryTrackerService.shared
-        _ = PowerMetricsService.shared
 
         let aboutItem = NSMenuItem(title: "About...", action: #selector(showAboutPanel), keyEquivalent: "")
         aboutItem.target = self

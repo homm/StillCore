@@ -64,7 +64,7 @@ final class StatusItemController: NSObject {
     private func updateStatusItemMetrics(_ metrics: Metrics) {
         lastMetrics = metrics
         if displayDescriptors.isEmpty {
-            buildStatusItemMenu(with: metrics)
+            buildStatusItemMenu()
             applyStatusItemDisplayMode(AppSettings.statusItemDisplayMode ?? "icon")
         } else {
             applyStatusItemMetrics(to: statusItem)
@@ -103,16 +103,12 @@ final class StatusItemController: NSObject {
         formatStatusItemPercent(state.currentPercent)
     }
 
-    private func formatStatusItemFrequency(_ valueGHz: Double) -> String {
-        String(format: "%4.2f GHz", locale: FormatLocale.posix, valueGHz)
-    }
-
     private func formatStatusItemMemoryGb(_ valueGb: Double) -> String {
         String(format: "%4.1f GB", locale: FormatLocale.posix, valueGb)
     }
 
-    private func buildStatusItemMenu(with metrics: Metrics) {
-        displayDescriptors = makeStatusItemDisplayDescriptors(metrics: metrics)
+    private func buildStatusItemMenu() {
+        displayDescriptors = makeStatusItemDisplayDescriptors()
         menu.insertItem(.separator(), at: 0)
         for descriptor in displayDescriptors.reversed() {
             let item = NSMenuItem(
@@ -220,8 +216,15 @@ final class StatusItemController: NSObject {
         applyStatusItemDisplayMode(persistenceValue)
     }
 
-    private func makeStatusItemDisplayDescriptors(metrics: Metrics) -> [StatusItemDisplayDescriptor] {
+    private func makeStatusItemDisplayDescriptors() -> [StatusItemDisplayDescriptor] {
         var descriptors = [StatusItemDisplayDescriptor.icon]
+        let cpuTierWeights: [Double] = AppDependencies.shared.socInfo?.cpuTiers.map {
+            let maxFrequency = Double($0.freqs.max() ?? 0)
+            // Squared frequency is a heuristic for faster tiers doing more work per clock,
+            // so fully busy efficiency cores contribute less to the overall CPU load.
+            return Double($0.cores) * maxFrequency * maxFrequency
+        } ?? []
+        let totalCPUWeight = cpuTierWeights.reduce(0, +)
 
         if BatteryTrackerService.isBatteryAvailable {
             descriptors += [
@@ -243,7 +246,7 @@ final class StatusItemController: NSObject {
                 displayName: "System power",
                 persistenceValue: "systemPower",
                 source: .metrics(
-                    { metrics in Double(metrics.power.board) },
+                    { metrics in Double(metrics.sysPower) },
                     formatStatusItemPower
                 )
             ),
@@ -251,7 +254,15 @@ final class StatusItemController: NSObject {
                 displayName: "Chip power",
                 persistenceValue: "chipPower",
                 source: .metrics(
-                    { metrics in Double(metrics.power.package) },
+                    { metrics in Double(metrics.chipPower) },
+                    formatStatusItemPower
+                )
+            ),
+            StatusItemDisplayDescriptor(
+                displayName: "CPU power",
+                persistenceValue: "cpuPower",
+                source: .metrics(
+                    { metrics in Double(metrics.cpuPower) },
                     formatStatusItemPower
                 )
             ),
@@ -260,7 +271,7 @@ final class StatusItemController: NSObject {
                 persistenceValue: "maxTemperature",
                 source: .metrics(
                     { metrics in
-                        Double(max(metrics.temperature.cpuAverage, metrics.temperature.gpuAverage))
+                        Double(max(metrics.temp.cpuTempAvg, metrics.temp.gpuTempAvg))
                     },
                     formatStatusItemTemperature
                 )
@@ -270,47 +281,15 @@ final class StatusItemController: NSObject {
                 persistenceValue: "totalCpuLoad",
                 source: .metrics(
                     { metrics in
-                        let totalUnits = metrics.cpu_usage.reduce(0) {
-                            $0 + Int($1.units)
+                        if totalCPUWeight == 0 { return Double(metrics.cpuActiveRatio) }
+                        let weightedUsage = zip(metrics.cpuTiers, cpuTierWeights).reduce(0.0) {
+                            $0 + Double($1.0.activeRatio) * $1.1
                         }
-                        let weightedUsage = metrics.cpu_usage.reduce(0 as Float) {
-                            $0 + ($1.usage * Float($1.units))
-                        }
-                        return totalUnits > 0 ? Double(weightedUsage / Float(totalUnits)) : 0
+                        return weightedUsage / totalCPUWeight
                     },
                     formatStatusItemUsage
                 )
             ),
-        ]
-
-        descriptors += metrics.cpu_usage.enumerated().flatMap { index, cluster in
-            [
-                StatusItemDisplayDescriptor(
-                    displayName: "\(cluster.name) load",
-                    persistenceValue: "cpuClusterLoad:\(index)",
-                    source: .metrics(
-                        { metrics in
-                            guard metrics.cpu_usage.indices.contains(index) else { return nil }
-                            return Double(metrics.cpu_usage[index].usage)
-                        },
-                        formatStatusItemUsage
-                    )
-                ),
-                StatusItemDisplayDescriptor(
-                    displayName: "\(cluster.name) frequency",
-                    persistenceValue: "cpuClusterFrequency:\(index)",
-                    source: .metrics(
-                        { metrics in
-                            guard metrics.cpu_usage.indices.contains(index) else { return nil }
-                            return Double(metrics.cpu_usage[index].frequencyMHz) / 1000.0
-                        },
-                        formatStatusItemFrequency
-                    )
-                ),
-            ]
-        }
-
-        descriptors += [
             StatusItemDisplayDescriptor(
                 displayName: "RAM used",
                 persistenceValue: "ramUsed",

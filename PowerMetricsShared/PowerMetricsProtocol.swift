@@ -6,10 +6,6 @@ import Security
     func start(reply: @escaping @Sendable (String?) -> Void)
 }
 
-@objc(PowerMetricsClientProtocol) protocol PowerMetricsClientProtocol {
-    func powerMetricsStopped(_ message: String)
-}
-
 enum PowerMetricsConstants {
     static let plistName = "com.github.homm.StillCore.PowerMetrics.plist"
     static let helperName = "PowerMetricsHelper"
