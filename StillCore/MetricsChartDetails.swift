@@ -15,6 +15,15 @@ final class MetricsCurrentValuesRenderer: LineChartRenderer {
     private var currentValuesHeight: CGFloat?
     private var lineHeights: [CGFloat] = []
 
+    override func drawFilledPath(context: CGContext, path: CGPath, fillColor: NSColor, fillAlpha: CGFloat) {
+        context.saveGState()
+        if fillColor.alphaComponent < 1 {
+            context.setBlendMode(.overlay)
+        }
+        super.drawFilledPath(context: context, path: path, fillColor: fillColor, fillAlpha: fillAlpha)
+        context.restoreGState()
+    }
+
     func resetCurrentValuesLayout() {
         currentValuesHeight = nil
         lineHeights = []
@@ -203,7 +212,7 @@ enum MetricsDetailsBuilder {
             case .line:
                 descriptor.color
             case .fill:
-                descriptor.color.withAlphaComponent(0.6)
+                descriptor.color.withAlphaComponent(max(descriptor.color.alphaComponent, 0.6))
             }
 
             currentItems.append(

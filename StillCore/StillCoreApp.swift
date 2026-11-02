@@ -144,6 +144,9 @@ final class AppDependencies: ObservableObject {
 
     private func publish(_ source: Metrics) {
         var metrics = source
+        // Keep CHIP above the stacked components and SYS above CHIP when reported totals disagree.
+        metrics.chipPower = max(metrics.chipPower, metrics.cpuPower + metrics.anePower + metrics.gpuPower)
+        metrics.sysPower = max(metrics.sysPower, metrics.chipPower)
         for index in metrics.cpuTiers.indices {
             var tier = metrics.cpuTiers[index]
             // Ignore frequencies reported by idle cores when choosing the active peak.
@@ -242,13 +245,13 @@ final class AppDependencies: ObservableObject {
 
 private enum MetricsChartPalette {
     static let board = color(light: (0.06, 0.736, 0.14), dark: (0.18, 0.92, 0.28))
-    static let package = color(light: (0.058, 0.406, 0.892), dark: (0.13, 0.48, 0.97))
-    static let cpu = color(light: (0.246, 0.663, 0.902), dark: (0.32, 0.74, 0.98))
-    static let gpu = color(light: (0.92, 0.188, 0.0), dark: (1.0, 0.30, 0.10))
+    static let package = color(light: (0.246, 0.663, 0.902), dark: (0.13, 0.48, 0.97))
+    static let cpu = color(light: (0.058, 0.406, 0.892), dark: (0.32, 0.74, 0.98))
+    static let gpu = color(light: (0.88, 0.29, 0.59), dark: (0.96, 0.38, 0.66))
     static let ane = color(light: (0.94, 0.62, 0.0), dark: (1.0, 0.66, 0.08))
 
     static let cpuFrequencyPalette: [NSColor] = [
-        board, package, cpu,
+        board, cpu, package,
         color(light: (0.117, 0.534, 0.773), dark: (0.26, 0.68, 0.92)),
         color(light: (0.048, 0.366, 0.644), dark: (0.18, 0.52, 0.82)),
     ]
@@ -320,29 +323,32 @@ private enum MetricsChartDefinitions {
                 MetricsSeriesDescriptor(
                     title: "CHIP",
                     color: MetricsChartPalette.package,
-                    kind: .line,
+                    kind: .fill,
                     chartValue: { $0.chipPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CPU",
                     color: MetricsChartPalette.cpu,
-                    kind: .line,
+                    kind: .fill,
                     chartValue: { $0.cpuPower },
+                    stacksWithVisibleSeries: true,
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "ANE",
                     color: MetricsChartPalette.ane,
-                    kind: .line,
+                    kind: .fill,
                     chartValue: { $0.anePower },
+                    stacksWithVisibleSeries: true,
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "GPU",
                     color: MetricsChartPalette.gpu,
-                    kind: .line,
+                    kind: .fill,
                     chartValue: { $0.gpuPower },
+                    stacksWithVisibleSeries: true,
                     detailsFormatter: Formatters.watts
                 ),
             ]
@@ -358,7 +364,7 @@ private enum MetricsChartDefinitions {
             [
                 MetricsSeriesDescriptor(
                     title: "CPU",
-                    color: MetricsChartPalette.cpu,
+                    color: MetricsChartPalette.package,
                     kind: .line,
                     lineWidth: 2.0,
                     chartValue: { $0.temp.cpuTempAvg },
@@ -422,7 +428,7 @@ When usage is at 100%, the area reaches the line.
                 ),
                 MetricsSeriesDescriptor(
                     title: title,
-                    color: color.withAlphaComponent(0.3),
+                    color: color.withAlphaComponent(0.6),
                     kind: .fill,
                     chartValue: { metrics in
                         metrics.cpuTiers[index].activeRatio
@@ -458,7 +464,7 @@ When usage is at 100%, the area reaches the line.
             ),
             MetricsSeriesDescriptor(
                 title: "GPU",
-                color: color.withAlphaComponent(0.3),
+                color: color.withAlphaComponent(0.6),
                 kind: .fill,
                 chartValue: { metrics in
                     metrics.gpuActiveRatio
@@ -496,8 +502,15 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
-                    .font(.headline)
+                if let chipName = dependencies.chipName, chipName.hasPrefix("Apple ") {
+                    let logo = Text(Image(systemName: "apple.logo"))
+                        .baselineOffset(0.5)
+                    Text("\(logo)\u{2005}\(chipName.dropFirst("Apple ".count))")
+                        .font(.headline)
+                } else {
+                    Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
+                        .font(.headline)
+                }
                 Text(dependencies.socSummary)
                     .foregroundStyle(.secondary)
                 Spacer()
