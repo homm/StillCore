@@ -489,7 +489,7 @@ struct ContentView: View {
     @ObservedObject private var dependencies = AppDependencies.shared
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
     @ObservedObject var presentationState: MenuPresentationState
-    @State private var highlightedChartSampleX: Double?
+    @State private var chartSelection = ChartSelection()
     @State private var isBatteryTrackerPopoverPresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
@@ -571,7 +571,7 @@ struct ContentView: View {
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
                             historyResetRevision: dependencies.chartHistoryResetRevision,
-                            highlightedSampleX: $highlightedChartSampleX
+                            selection: chartSelection
                         )
                             .frame(height: metrics.size.height * 0.35)
                             .background(backgroundColor)
@@ -583,7 +583,7 @@ struct ContentView: View {
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
                             historyResetRevision: dependencies.chartHistoryResetRevision,
-                            highlightedSampleX: $highlightedChartSampleX,
+                            selection: chartSelection,
                             settingsInvalidationKey: AnyHashable(dependencies.frequencyUsageByCores),
                             settingsView: AnyView(
                                 Toggle(
@@ -603,7 +603,7 @@ struct ContentView: View {
                             capacity: AppPresentation.chartHistoryCapacity,
                             showUpdates: presentationState.isWindowVisible,
                             historyResetRevision: dependencies.chartHistoryResetRevision,
-                            highlightedSampleX: $highlightedChartSampleX,
+                            selection: chartSelection,
                             yAxisLabelCount: 4,
                             yStart: 30
                         )
