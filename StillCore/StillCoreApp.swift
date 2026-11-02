@@ -158,7 +158,32 @@ final class AppDependencies: ObservableObject {
         }
     }
 
-    private func publish(_ metrics: Metrics) {
+    private func publish(_ source: Metrics) {
+        var metrics = source
+        for index in metrics.cpuTiers.indices {
+            var tier = metrics.cpuTiers[index]
+            // Ignore frequencies reported by idle cores when choosing the active peak.
+            var frequency = tier.cores.filter { $0.activeRatio > 0 }.map(\.freqMHz).max() ?? 0
+            // Per-core frequency is averaged over active time. Weight it by active residency
+            // to recover each core's effective frequency over the whole sampling interval.
+            let effectiveFrequency = tier.cores.reduce(0 as Float) {
+                $0 + Float($1.freqMHz) * $1.activeRatio
+            }
+            var coreCount = tier.cores.count
+            if let cpuTiers = socInfo?.cpuTiers, cpuTiers.indices.contains(index) {
+                // Missing sampled cores still count toward the tier's total capacity.
+                coreCount = max(coreCount, Int(cpuTiers[index].cores))
+                // Keep the chart line at a supported frequency during idle intervals.
+                let minimumFrequency = cpuTiers[index].freqs.filter { $0 > 0 }.min() ?? 0
+                frequency = max(frequency, minimumFrequency)
+            }
+            // This ratio represents effective load at the displayed frequency. Multiplying
+            // the two for the chart fill recovers mean effective frequency across all cores.
+            tier.freqMHz = frequency
+            tier.activeRatio = frequency > 0 && coreCount > 0
+                ? effectiveFrequency / (Float(coreCount) * Float(frequency)) : 0
+            metrics.cpuTiers[index] = tier
+        }
         metricsSubject.send(metrics)
         if !metricsError.isEmpty {
             metricsError = ""
