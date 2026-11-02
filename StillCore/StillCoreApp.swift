@@ -502,8 +502,15 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
-                    .font(.headline)
+                if let chipName = dependencies.chipName, chipName.hasPrefix("Apple ") {
+                    let logo = Text(Image(systemName: "apple.logo"))
+                        .baselineOffset(0.5)
+                    Text("\(logo)\u{2005}\(chipName.dropFirst("Apple ".count))")
+                        .font(.headline)
+                } else {
+                    Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
+                        .font(.headline)
+                }
                 Text(dependencies.socSummary)
                     .foregroundStyle(.secondary)
                 Spacer()
