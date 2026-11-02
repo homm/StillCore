@@ -12,6 +12,7 @@ struct MetricsSeriesDescriptor {
 
     let title: String
     let color: NSColor
+    var textColor: NSColor?
     let kind: Kind
     var lineWidth = 1.0
     let chartValue: (Metrics) -> Float

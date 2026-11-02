@@ -219,7 +219,7 @@ enum MetricsDetailsBuilder {
                 .init(
                     descriptorIndex: point.descriptorIndex,
                     text: descriptor.detailsFormatter(point.detailsValue),
-                    color: itemColor,
+                    color: descriptor.textColor ?? itemColor,
                     label: currentItems.isEmpty ? descriptor.title : nil
                 )
             )
