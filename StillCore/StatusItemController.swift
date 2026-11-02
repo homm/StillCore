@@ -243,7 +243,7 @@ final class StatusItemController: NSObject {
                 displayName: "System power",
                 persistenceValue: "systemPower",
                 source: .metrics(
-                    { metrics in Double(metrics.power.board) },
+                    { metrics in Double(metrics.sysPower) },
                     formatStatusItemPower
                 )
             ),
@@ -251,7 +251,7 @@ final class StatusItemController: NSObject {
                 displayName: "Chip power",
                 persistenceValue: "chipPower",
                 source: .metrics(
-                    { metrics in Double(metrics.power.package) },
+                    { metrics in Double(metrics.chipPower) },
                     formatStatusItemPower
                 )
             ),
@@ -260,7 +260,7 @@ final class StatusItemController: NSObject {
                 persistenceValue: "maxTemperature",
                 source: .metrics(
                     { metrics in
-                        Double(max(metrics.temperature.cpuAverage, metrics.temperature.gpuAverage))
+                        Double(max(metrics.temp.cpuTempAvg, metrics.temp.gpuTempAvg))
                     },
                     formatStatusItemTemperature
                 )
@@ -269,40 +269,36 @@ final class StatusItemController: NSObject {
                 displayName: "CPU load",
                 persistenceValue: "totalCpuLoad",
                 source: .metrics(
-                    { metrics in
-                        let totalUnits = metrics.cpu_usage.reduce(0) {
-                            $0 + Int($1.units)
-                        }
-                        let weightedUsage = metrics.cpu_usage.reduce(0 as Float) {
-                            $0 + ($1.usage * Float($1.units))
-                        }
-                        return totalUnits > 0 ? Double(weightedUsage / Float(totalUnits)) : 0
-                    },
+                    { metrics in Double(metrics.cpuActiveRatio) },
                     formatStatusItemUsage
                 )
             ),
         ]
 
-        descriptors += metrics.cpu_usage.enumerated().flatMap { index, cluster in
+        descriptors += metrics.cpuTiers.enumerated().flatMap { index, cluster in
             [
                 StatusItemDisplayDescriptor(
-                    displayName: "\(cluster.name) load",
+                    displayName: "\(cluster.label) load",
                     persistenceValue: "cpuClusterLoad:\(index)",
                     source: .metrics(
                         { metrics in
-                            guard metrics.cpu_usage.indices.contains(index) else { return nil }
-                            return Double(metrics.cpu_usage[index].usage)
+                            if metrics.cpuTiers.indices.contains(index) {
+                                return Double(metrics.cpuTiers[index].activeRatio)
+                            }
+                            return nil
                         },
                         formatStatusItemUsage
                     )
                 ),
                 StatusItemDisplayDescriptor(
-                    displayName: "\(cluster.name) frequency",
+                    displayName: "\(cluster.label) frequency",
                     persistenceValue: "cpuClusterFrequency:\(index)",
                     source: .metrics(
                         { metrics in
-                            guard metrics.cpu_usage.indices.contains(index) else { return nil }
-                            return Double(metrics.cpu_usage[index].frequencyMHz) / 1000.0
+                            if metrics.cpuTiers.indices.contains(index) {
+                                return Double(metrics.cpuTiers[index].freqMHz) / 1000.0
+                            }
+                            return nil
                         },
                         formatStatusItemFrequency
                     )

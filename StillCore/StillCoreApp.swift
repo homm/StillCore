@@ -99,7 +99,6 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsTask: Task<Void, Never>?
-    private var lastCPUPower: Float?
     private let metricsSubject = PassthroughSubject<Metrics, Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
@@ -119,7 +118,6 @@ final class AppDependencies: ObservableObject {
     func startMetricsLoop() {
         guard metricsTask == nil else { return }
         metricsError = ""
-        lastCPUPower = nil
 
         metricsTask = Task.detached {
             let clock = ContinuousClock()
@@ -160,15 +158,7 @@ final class AppDependencies: ObservableObject {
         }
     }
 
-    private func publish(_ source: Metrics) {
-        var metrics = source
-        // A chip spike after zero CPU can include stale energy; retain GPU power only.
-        if metrics.power.package > metrics.power.board && (lastCPUPower == nil || lastCPUPower == 0) {
-            metrics.power.package = metrics.power.gpu
-            metrics.power.cpu = 0
-            metrics.power.ane = 0
-        }
-        lastCPUPower = metrics.power.cpu
+    private func publish(_ metrics: Metrics) {
         metricsSubject.send(metrics)
         if !metricsError.isEmpty {
             metricsError = ""
@@ -189,16 +179,8 @@ final class AppDependencies: ObservableObject {
     }
 
     private func formatSocSummary(_ info: SocInfo) -> String {
-        var parts = info.cpuDomains.compactMap { domain -> String? in
-            var name = domain.name.uppercased()
-            let lower = domain.name.lowercased()
-            if lower == "ecpu" {
-                name = "E"
-            }
-            if lower == "pcpu" {
-                name = "P"
-            }
-            return "\(domain.units)\(name)"
+        var parts = info.cpuTiers.map { tier in
+            "\(tier.cores)\(tier.label)"
         }
         parts.append("\(info.gpuCores)G cores")
         return parts.joined(separator: " ")
@@ -322,35 +304,35 @@ private enum MetricsChartDefinitions {
                     title: "SYS",
                     color: MetricsChartPalette.board,
                     kind: .line,
-                    chartValue: { Double($0.power.board) },
+                    chartValue: { Double($0.sysPower) },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CHIP",
                     color: MetricsChartPalette.package,
                     kind: .line,
-                    chartValue: { Double($0.power.package) },
+                    chartValue: { Double($0.chipPower) },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CPU",
                     color: MetricsChartPalette.cpu,
                     kind: .line,
-                    chartValue: { Double($0.power.cpu) },
+                    chartValue: { Double($0.cpuPower) },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "ANE",
                     color: MetricsChartPalette.ane,
                     kind: .line,
-                    chartValue: { Double($0.power.ane) },
+                    chartValue: { Double($0.anePower) },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "GPU",
                     color: MetricsChartPalette.gpu,
                     kind: .line,
-                    chartValue: { Double($0.power.gpu) },
+                    chartValue: { Double($0.gpuPower) },
                     detailsFormatter: Formatters.watts
                 ),
             ]
@@ -369,7 +351,7 @@ private enum MetricsChartDefinitions {
                     color: MetricsChartPalette.cpu,
                     kind: .line,
                     lineWidth: 2.0,
-                    chartValue: { Double($0.temperature.cpuAverage) },
+                    chartValue: { Double($0.temp.cpuTempAvg) },
                     detailsFormatter: Formatters.temperature
                 ),
                 MetricsSeriesDescriptor(
@@ -377,7 +359,7 @@ private enum MetricsChartDefinitions {
                     color: MetricsChartPalette.gpu,
                     kind: .line,
                     lineWidth: 2.0,
-                    chartValue: { Double($0.temperature.gpuAverage) },
+                    chartValue: { Double($0.temp.gpuTempAvg) },
                     detailsFormatter: Formatters.temperature
                 ),
             ]
@@ -399,19 +381,18 @@ When usage is at 100%, the area reaches the line.
 """,
         schemaBuilder: { metrics in
             guard let metrics else { return AnyHashable("frequency.empty") }
-            return AnyHashable(
-                metrics.cpu_usage.map(\.name) + ["|"] + metrics.gpu_usage.map(\.name)
-            )
+            return AnyHashable(metrics.cpuTiers.map(\.label))
         },
         seriesBuilder: { metrics in
             guard let metrics else { return [] }
-            return cpuFrequencySeries(from: metrics) + gpuFrequencySeries(from: metrics)
+            return cpuFrequencySeries(from: metrics) + gpuFrequencySeries()
         }
     )
 
     private static func cpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
-        metrics.cpu_usage.enumerated().flatMap { index, cluster in
-            let title = metrics.cpu_usage.count == 1 ? "CPU" : cluster.name
+        metrics.cpuTiers.enumerated().flatMap { index, cluster in
+            let title = metrics.cpuTiers.count == 1 ? "CPU"
+                : cluster.label.count == 1 ? "\(cluster.label)CPU" : cluster.label
             let color = MetricsChartPalette.cpuFrequencyPalette[
                 index % MetricsChartPalette.cpuFrequencyPalette.count
             ]
@@ -424,7 +405,7 @@ When usage is at 100%, the area reaches the line.
                     color: color,
                     kind: .line,
                     chartValue: { metrics in
-                        Double(cpuChartFrequencyMHz(metrics, index: index)) / 1000
+                        Double(metrics.cpuTiers[index].freqMHz) / 1000
                     },
                     detailsFormatter: Formatters.frequencyGHz,
                     detailsGroup: group
@@ -434,11 +415,12 @@ When usage is at 100%, the area reaches the line.
                     color: color.withAlphaComponent(0.3),
                     kind: .fill,
                     chartValue: { metrics in
-                        Double(metrics.cpu_usage[index].usage)
-                            * Double(cpuChartFrequencyMHz(metrics, index: index)) / 1000
+                        Double(metrics.cpuTiers[index].activeRatio)
+                            * Double(metrics.cpuTiers[index].freqMHz) / 1000
                     },
                     detailsValue: { metrics in
-                        Double(metrics.cpu_usage[index].usage)
+                        // TODO: Store Floats
+                        Double(metrics.cpuTiers[index].activeRatio)
                     },
                     detailsFormatter: { usage in
                         Formatters.usage(
@@ -451,66 +433,54 @@ When usage is at 100%, the area reaches the line.
         }
     }
 
-    private static func gpuFrequencySeries(from metrics: Metrics) -> [MetricsSeriesDescriptor] {
-        metrics.gpu_usage.enumerated().flatMap { index, cluster in
-            let title = metrics.gpu_usage.count == 1 ? "GPU" : cluster.name
-            let color = MetricsChartPalette.gpuFrequencyPalette[
-                index % MetricsChartPalette.gpuFrequencyPalette.count
-            ]
-            let group = "gpu.\(index)"
-
-            return [
-                MetricsSeriesDescriptor(
-                    title: title,
-                    color: color,
-                    kind: .line,
-                    chartValue: { metrics in
-                        Double(gpuChartFrequencyMHz(metrics, index: index)) / 1000
-                    },
-                    detailsFormatter: Formatters.frequencyGHz,
-                    detailsGroup: group
-                ),
-                MetricsSeriesDescriptor(
-                    title: title,
-                    color: color.withAlphaComponent(0.3),
-                    kind: .fill,
-                    chartValue: { metrics in
-                        Double(metrics.gpu_usage[index].usage)
-                            * Double(gpuChartFrequencyMHz(metrics, index: index)) / 1000
-                    },
-                    detailsValue: { metrics in
-                        Double(metrics.gpu_usage[index].usage)
-                    },
-                    detailsFormatter: Formatters.usage,
-                    detailsGroup: group
-                ),
-            ]
-        }
-    }
-
-    private static func cpuChartFrequencyMHz(_ metrics: Metrics, index: Int) -> UInt32 {
-        let frequency = metrics.cpu_usage[index].frequencyMHz
-        guard frequency == 0,
-            let domains = AppDependencies.shared.socInfo?.cpuDomains,
-            domains.indices.contains(index),
-            let minimumFrequency = domains[index].frequenciesMHz.first
-        else { return frequency }
-        return minimumFrequency
+    private static func gpuFrequencySeries() -> [MetricsSeriesDescriptor] {
+        let color = MetricsChartPalette.gpuFrequencyPalette[0]
+        return [
+            MetricsSeriesDescriptor(
+                title: "GPU",
+                color: color,
+                kind: .line,
+                chartValue: { metrics in
+                    // TODO: Cache min value
+                    Double(gpuChartFrequencyMHz(metrics)) / 1000
+                },
+                detailsFormatter: Formatters.frequencyGHz,
+                detailsGroup: "gpu.0"
+            ),
+            MetricsSeriesDescriptor(
+                title: "GPU",
+                color: color.withAlphaComponent(0.3),
+                kind: .fill,
+                chartValue: { metrics in
+                    Double(metrics.gpuActiveRatio)
+                        * Double(gpuChartFrequencyMHz(metrics)) / 1000
+                },
+                detailsValue: { metrics in
+                    Double(metrics.gpuActiveRatio)
+                },
+                detailsFormatter: Formatters.usage,
+                detailsGroup: "gpu.0"
+            ),
+        ]
     }
 
     private static func cpuChartCoreCount(index: Int) -> Double {
-        guard let domains = AppDependencies.shared.socInfo?.cpuDomains,
+        if let domains = AppDependencies.shared.socInfo?.cpuTiers,
             domains.indices.contains(index)
-        else { return 1 }
-        return Double(domains[index].units)
+        {
+            return Double(domains[index].cores)
+        }
+        return 1
     }
 
-    private static func gpuChartFrequencyMHz(_ metrics: Metrics, index: Int) -> UInt32 {
-        let frequency = metrics.gpu_usage[index].frequencyMHz
-        guard frequency == 0,
-            let minimumFrequency = AppDependencies.shared.socInfo?.gpuFrequenciesMHz.first
-        else { return frequency }
-        return minimumFrequency
+    private static func gpuChartFrequencyMHz(_ metrics: Metrics) -> UInt32 {
+        let frequency = metrics.gpuFreqMHz
+        if frequency == 0,
+            let minimumFrequency = AppDependencies.shared.socInfo?.gpuFreqs.first
+        {
+            return minimumFrequency
+        }
+        return frequency
     }
 }
 
