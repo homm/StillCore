@@ -14,17 +14,15 @@ final class PowerMetricsService: HelperService {
                    helperName: PowerMetricsConstants.helperName)
     }
 
-    override func initialize() {
-        if #unavailable(macOS 27.0) { return }
-        super.initialize()
-    }
+    // Keep existing registrations dormant until the helper has work again.
+    override func initialize() {}
 
     override func prepareForOperation() {
         disconnect()
     }
 
     override func ensureRunning() async throws {
-        if #unavailable(macOS 27.0) { throw HelperFailure("CPU power updates require macOS 27.") }
+        if #unavailable(macOS 27.0) { throw HelperFailure("The helper requires macOS 27.") }
         let requirement: String
         do {
             let executable = Bundle.main.bundleURL
@@ -42,10 +40,6 @@ final class PowerMetricsService: HelperService {
         if self.connection != nil { return }
         let id = UUID()
         connection.remoteObjectInterface = NSXPCInterface(with: PowerMetricsHelperProtocol.self)
-        connection.exportedInterface = NSXPCInterface(with: PowerMetricsClientProtocol.self)
-        connection.exportedObject = PowerMetricsClient { [weak self] message in
-            Task { @MainActor in self?.failed(message, connectionID: id) }
-        }
         connection.invalidationHandler = { @Sendable [weak self] in
             Task { @MainActor in
                 self?.failed("The CPU power helper disconnected. Try starting it again.", connectionID: id)
@@ -115,17 +109,5 @@ final class PowerMetricsService: HelperService {
         connectionID = nil
         connection?.invalidate()
         connection = nil
-    }
-}
-
-private final class PowerMetricsClient: NSObject, PowerMetricsClientProtocol, Sendable {
-    private let onStop: @Sendable (String) -> Void
-
-    init(onStop: @escaping @Sendable (String) -> Void) {
-        self.onStop = onStop
-    }
-
-    func powerMetricsStopped(_ message: String) {
-        onStop(message)
     }
 }

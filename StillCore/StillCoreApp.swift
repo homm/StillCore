@@ -478,11 +478,9 @@ When usage is at 100%, the area reaches the line.
 struct ContentView: View {
     @ObservedObject private var dependencies = AppDependencies.shared
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
-    @ObservedObject private var powerMetricsService = PowerMetricsService.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var highlightedChartSampleX: Double?
     @State private var isBatteryTrackerPopoverPresented = false
-    @State private var isPowerMetricsPopoverPresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
     var body: some View {
@@ -567,23 +565,6 @@ struct ContentView: View {
                         )
                             .frame(height: metrics.size.height * 0.35)
                             .background(backgroundColor)
-                            .overlay(alignment: .topTrailing) {
-                                if powerMetricsService.status != .running {
-                                    Button {
-                                        isPowerMetricsPopoverPresented.toggle()
-                                    } label: {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .font(.system(size: 18))
-                                            .foregroundStyle(.orange)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("CPU Power Updates")
-                                    .popover(isPresented: $isPowerMetricsPopoverPresented, arrowEdge: .top) {
-                                        PowerMetricsPopover(service: powerMetricsService)
-                                    }
-                                    .offset(y: -4)
-                                }
-                            }
                             .padding(chartSectionInsets)
 
                         MetricsChartSection(
@@ -728,47 +709,6 @@ struct ContentView: View {
         }
     }
 
-    private struct PowerMetricsPopover: View {
-        @ObservedObject var service: PowerMetricsService
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("CPU Power Updates on macOS 27")
-                    .font(.headline)
-                Text("On macOS 27, CPU power readings can stop updating for third-party apps. Running Apple's powermetrics tool in the background restores updates.")
-
-                if let errorMessage = service.errorMessage {
-                    Text(errorMessage)
-                        .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
-                }
-
-                switch service.status {
-                case .stopped:
-                    Text(
-                        "Enabling this workaround requires administrator approval in System Settings. It adds a small amount of CPU and energy use, runs at background priority, and stops when StillCore quits."
-                    ).foregroundStyle(.secondary)
-                    Button("Start Service") { Task { await service.start() } }
-                case .requiresApproval:
-                    Text(
-                        "Approve StillCore in System Settings → General → Login Items & Extensions."
-                    ).foregroundStyle(.secondary)
-                    Button("Open System Settings") { SMAppService.openSystemSettingsLoginItems() }
-                case .starting:
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("Starting CPU power updates…")
-                    }
-                case .running:
-                    EmptyView()
-                }
-            }
-            .padding(12)
-            .frame(width: 340, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private var intervalLabel: AttributedString {
         Self.intervalLabel(for: dependencies.metricsIntervalMs)
     }
@@ -836,7 +776,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         _ = BatteryTrackerService.shared
-        _ = PowerMetricsService.shared
 
         let aboutItem = NSMenuItem(title: "About...", action: #selector(showAboutPanel), keyEquivalent: "")
         aboutItem.target = self

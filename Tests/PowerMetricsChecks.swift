@@ -63,11 +63,6 @@ struct PowerMetricsChecks {
                      "A failed installation must remain retryable")
         print("PASS: failed installation leaves Start available for another attempt")
 
-        let absentService = PowerMetricsService.shared
-        absentService.initialize()
-        precondition(absentService.status == .stopped && absentService.errorMessage == nil, "An unregistered service must offer Start, not an error")
-        print("PASS: an absent service offers installation")
-
         let service = PowerMetricsService.shared
         do {
             try await service.connect(NSXPCConnection(machServiceName: "com.github.homm.StillCore.Tests.Missing.\(UUID())", options: .privileged))
@@ -102,16 +97,16 @@ struct PowerMetricsChecks {
         silentListener.invalidate()
         try await connectedService.connect(NSXPCConnection(listenerEndpoint: listener.endpoint))
         precondition(delegate.startCount == 1, "A duplicate connection must not send another start request")
-        delegate.notifyStop("Sampling stopped unexpectedly")
+        delegate.disconnect()
         let failureDeadline = ContinuousClock.now + .seconds(2)
         while connectedService.errorMessage == nil && ContinuousClock.now < failureDeadline {
             try await Task.sleep(for: .milliseconds(10))
         }
-        precondition(connectedService.status == .stopped && connectedService.errorMessage == "Sampling stopped unexpectedly",
-                     "An unexpected process exit must stop the service and expose separate error details")
+        precondition(connectedService.status == .stopped && connectedService.errorMessage != nil,
+                     "An XPC disconnection must stop the service and expose error details")
         connectedService.refresh()
         precondition(connectedService.status == .stopped && delegate.startCount == 1,
-                     "Polling after a process error must not restart sampling")
+                     "Polling after a connection error must not reconnect automatically")
         try await connectedService.connect(NSXPCConnection(listenerEndpoint: listener.endpoint))
         precondition(delegate.startCount == 2, "An explicit reconnect must confirm a fresh start")
         listener.invalidate()
@@ -124,13 +119,6 @@ struct PowerMetricsChecks {
         precondition(process.terminationStatus == EXIT_FAILURE)
         print("PASS: the helper refuses to run without root")
 
-        let pid = try PowerMetricsEngine.spawnPowerMetrics()
-        precondition(getpgid(pid) == getpgrp(), "powermetrics must stay in the helper's process group")
-        var status: Int32 = 0
-        precondition(waitpid(pid, &status, 0) == pid)
-        precondition(status != 0, "powermetrics must refuse sampling without root")
-        precondition(waitpid(pid, &status, WNOHANG) == -1 && errno == ECHILD)
-        print("PASS: the child inherits the helper's group and is reaped after exit")
     }
 
     @MainActor
@@ -456,16 +444,14 @@ private final class CheckListener: NSObject, NSXPCListenerDelegate, PowerMetrics
         reply?(nil)
     }
 
-    func notifyStop(_ message: String) {
+    func disconnect() {
         let connection = lock.withLock { connection }
-        let client = connection?.remoteObjectProxy as? PowerMetricsClientProtocol
-        client?.powerMetricsStopped(message)
+        connection?.invalidate()
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         connection.exportedInterface = NSXPCInterface(with: PowerMetricsHelperProtocol.self)
         connection.exportedObject = self
-        connection.remoteObjectInterface = NSXPCInterface(with: PowerMetricsClientProtocol.self)
         lock.withLock { self.connection = connection }
         connection.resume()
         return true

@@ -80,7 +80,6 @@ test: app
 	xcrun swiftc -swift-version 6 -parse-as-library \
 		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
 		PowerMetricsShared/PowerMetricsProtocol.swift \
-		PowerMetricsHelper/PowerMetricsEngine.swift \
 		StillCore/HelperService.swift \
 		StillCore/PowerMetricsService.swift \
 		BatteryTrackingShared/BatterySession.swift \
