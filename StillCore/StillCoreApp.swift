@@ -268,19 +268,19 @@ private enum MetricsChartPalette {
 @MainActor
 private enum MetricsChartDefinitions {
     private enum Formatters {
-        static func watts(_ value: Double) -> String {
+        static func watts(_ value: Float) -> String {
             String(format: "%.2f", locale: FormatLocale.posix, value)
         }
 
-        static func frequencyGHz(_ value: Double) -> String {
+        static func frequencyGHz(_ value: Float) -> String {
             String(format: "%.2f", locale: FormatLocale.posix, value)
         }
 
-        static func usage(_ value: Double) -> String {
+        static func usage(_ value: Float) -> String {
             String(format: "%.1f%%", locale: FormatLocale.posix, value * 100.0)
         }
 
-        static func temperature(_ value: Double) -> String {
+        static func temperature(_ value: Float) -> String {
             String(format: "%.1f", locale: FormatLocale.posix, value)
         }
     }
@@ -304,35 +304,35 @@ private enum MetricsChartDefinitions {
                     title: "SYS",
                     color: MetricsChartPalette.board,
                     kind: .line,
-                    chartValue: { Double($0.sysPower) },
+                    chartValue: { $0.sysPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CHIP",
                     color: MetricsChartPalette.package,
                     kind: .line,
-                    chartValue: { Double($0.chipPower) },
+                    chartValue: { $0.chipPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "CPU",
                     color: MetricsChartPalette.cpu,
                     kind: .line,
-                    chartValue: { Double($0.cpuPower) },
+                    chartValue: { $0.cpuPower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "ANE",
                     color: MetricsChartPalette.ane,
                     kind: .line,
-                    chartValue: { Double($0.anePower) },
+                    chartValue: { $0.anePower },
                     detailsFormatter: Formatters.watts
                 ),
                 MetricsSeriesDescriptor(
                     title: "GPU",
                     color: MetricsChartPalette.gpu,
                     kind: .line,
-                    chartValue: { Double($0.gpuPower) },
+                    chartValue: { $0.gpuPower },
                     detailsFormatter: Formatters.watts
                 ),
             ]
@@ -351,7 +351,7 @@ private enum MetricsChartDefinitions {
                     color: MetricsChartPalette.cpu,
                     kind: .line,
                     lineWidth: 2.0,
-                    chartValue: { Double($0.temp.cpuTempAvg) },
+                    chartValue: { $0.temp.cpuTempAvg },
                     detailsFormatter: Formatters.temperature
                 ),
                 MetricsSeriesDescriptor(
@@ -359,7 +359,7 @@ private enum MetricsChartDefinitions {
                     color: MetricsChartPalette.gpu,
                     kind: .line,
                     lineWidth: 2.0,
-                    chartValue: { Double($0.temp.gpuTempAvg) },
+                    chartValue: { $0.temp.gpuTempAvg },
                     detailsFormatter: Formatters.temperature
                 ),
             ]
@@ -405,7 +405,7 @@ When usage is at 100%, the area reaches the line.
                     color: color,
                     kind: .line,
                     chartValue: { metrics in
-                        Double(metrics.cpuTiers[index].freqMHz) / 1000
+                        Float(metrics.cpuTiers[index].freqMHz) / 1000
                     },
                     detailsFormatter: Formatters.frequencyGHz,
                     detailsGroup: group
@@ -415,16 +415,15 @@ When usage is at 100%, the area reaches the line.
                     color: color.withAlphaComponent(0.3),
                     kind: .fill,
                     chartValue: { metrics in
-                        Double(metrics.cpuTiers[index].activeRatio)
-                            * Double(metrics.cpuTiers[index].freqMHz) / 1000
+                        metrics.cpuTiers[index].activeRatio
+                            * Float(metrics.cpuTiers[index].freqMHz) / 1000
                     },
                     detailsValue: { metrics in
-                        // TODO: Store Floats
-                        Double(metrics.cpuTiers[index].activeRatio)
+                        metrics.cpuTiers[index].activeRatio
                     },
                     detailsFormatter: { usage in
                         Formatters.usage(
-                            usage * (AppDependencies.shared.frequencyUsageByCores ? coreCount : 1)
+                            usage * Float(AppDependencies.shared.frequencyUsageByCores ? coreCount : 1)
                         )
                     },
                     detailsGroup: group
@@ -442,7 +441,7 @@ When usage is at 100%, the area reaches the line.
                 color: color,
                 kind: .line,
                 chartValue: { metrics in
-                    Double(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
+                    Float(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
                 },
                 detailsFormatter: Formatters.frequencyGHz,
                 detailsGroup: "gpu.0"
@@ -452,11 +451,11 @@ When usage is at 100%, the area reaches the line.
                 color: color.withAlphaComponent(0.3),
                 kind: .fill,
                 chartValue: { metrics in
-                    Double(metrics.gpuActiveRatio)
-                        * Double(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
+                    metrics.gpuActiveRatio
+                        * Float(max(minimumFrequency, metrics.gpuFreqMHz)) / 1000
                 },
                 detailsValue: { metrics in
-                    Double(metrics.gpuActiveRatio)
+                    metrics.gpuActiveRatio
                 },
                 detailsFormatter: Formatters.usage,
                 detailsGroup: "gpu.0"
@@ -464,11 +463,11 @@ When usage is at 100%, the area reaches the line.
         ]
     }
 
-    private static func cpuChartCoreCount(index: Int) -> Double {
+    private static func cpuChartCoreCount(index: Int) -> Float {
         if let domains = AppDependencies.shared.socInfo?.cpuTiers,
             domains.indices.contains(index)
         {
-            return Double(domains[index].cores)
+            return Float(domains[index].cores)
         }
         return 1
     }

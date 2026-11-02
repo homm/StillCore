@@ -14,9 +14,9 @@ struct MetricsSeriesDescriptor {
     let color: NSColor
     let kind: Kind
     var lineWidth = 1.0
-    let chartValue: (Metrics) -> Double
-    var detailsValue: ((Metrics) -> Double)?
-    let detailsFormatter: (Double) -> String
+    let chartValue: (Metrics) -> Float
+    var detailsValue: ((Metrics) -> Float)?
+    let detailsFormatter: (Float) -> String
     var detailsGroup: String?
     var showsDetails = true
 }
@@ -34,8 +34,8 @@ struct MetricsChartDefinition {
 
 private struct MaterializedMetricsSample {
     struct SeriesValue {
-        let chartValue: Double
-        let detailsValue: Double
+        let chartValue: Float
+        let detailsValue: Float
     }
 
     let sampleID: Int
@@ -45,7 +45,7 @@ private struct MaterializedMetricsSample {
 
 struct MaterializedChartPoint {
     let descriptorIndex: Int
-    let detailsValue: Double
+    let detailsValue: Float
     let sampleDate: Date
 }
 
@@ -157,7 +157,7 @@ final class ChartDataController {
             dataSets[index].append(
                 ChartDataEntry(
                     x: Double(sample.sampleID),
-                    y: sample.values[index].chartValue,
+                    y: Double(sample.values[index].chartValue),
                     data: MaterializedChartPoint(
                         descriptorIndex: index,
                         detailsValue: sample.values[index].detailsValue,
