@@ -221,11 +221,9 @@ final class MetricsChartStore: ObservableObject {
     ) {
         self.definition = definition
         self.capacity = capacity
-        self.metricsSubscription = metricsPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] metrics in
-                self?.append(metrics)
-            }
+        self.metricsSubscription = metricsPublisher.sink { [weak self] metrics in
+            self?.append(metrics)
+        }
     }
 
     func setShowUpdates(_ showUpdates: Bool) {
@@ -342,7 +340,6 @@ final class MetricsLineChartView: LineChartView {
     )
     var yMaxResetRevision = 0
     var series: [MetricsSeriesDescriptor] = []
-    var clearHighlight: (() -> Void)?
     var onCurrentValuesRowMouseDown: ((MetricsDetailsBuilder.Row, Bool) -> Void)?
     var hiddenDescriptors: Set<Int> = []
     nonisolated(unsafe) private var currentValuesMouseDownMonitor: Any?
@@ -413,7 +410,7 @@ final class MetricsLineChartView: LineChartView {
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        clearHighlight?()
+        highlightValue(nil, callDelegate: true)
     }
 
     override func getMarkerPosition(highlight: Highlight) -> CGPoint {
@@ -466,6 +463,32 @@ final class MetricsLineChartView: LineChartView {
     }
 }
 
+@MainActor
+final class ChartSelection: NSObject, @preconcurrency ChartViewDelegate {
+    private let charts = NSHashTable<MetricsLineChartView>.weakObjects()
+    private(set) var sampleX: Double?
+
+    func register(_ chart: MetricsLineChartView) {
+        charts.add(chart)
+        chart.delegate = self
+    }
+
+    func select(_ x: Double?) {
+        sampleX = x
+        for chart in charts.allObjects {
+            chart.applySharedHighlight(x)
+        }
+    }
+
+    func chartValueSelected(_ chartView: ChartViewBase, entry: ChartDataEntry, highlight: Highlight) {
+        select(entry.x)
+    }
+
+    func chartValueNothingSelected(_ chartView: ChartViewBase) {
+        select(nil)
+    }
+}
+
 private struct MetricsDGChartView: NSViewRepresentable {
     let controller: ChartDataController
     let revision: Int
@@ -475,34 +498,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
     let yAxisLabelCount: Int
     let showsSampleTime: Bool
     let settingsInvalidationKey: AnyHashable
-    @Binding var highlightedSampleX: Double?
-
-    final class Coordinator: NSObject, ChartViewDelegate {
-        private let highlightedSampleX: Binding<Double?>
-
-        init(highlightedSampleX: Binding<Double?>) {
-            self.highlightedSampleX = highlightedSampleX
-        }
-
-        nonisolated
-        func chartValueSelected(
-            _ chartView: ChartViewBase,
-            entry: ChartDataEntry,
-            highlight: Highlight
-        ) {
-            let sampleX = entry.x
-            Task { @MainActor [highlightedSampleX] in highlightedSampleX.wrappedValue = sampleX }
-        }
-
-        nonisolated
-        func chartValueNothingSelected(_ chartView: ChartViewBase) {
-            Task { @MainActor [highlightedSampleX] in highlightedSampleX.wrappedValue = nil }
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(highlightedSampleX: $highlightedSampleX)
-    }
+    let selection: ChartSelection
 
     func makeNSView(context: Context) -> MetricsLineChartView {
         let chartView = MetricsLineChartView()
@@ -518,7 +514,6 @@ private struct MetricsDGChartView: NSViewRepresentable {
         chartView.extraTopOffset = 8
         chartView.extraBottomOffset = 4
         chartView.extraRightOffset = MetricsCurrentValuesLayout.rightOffset
-        chartView.clearHighlight = { highlightedSampleX = nil }
         chartView.onCurrentValuesRowMouseDown = { row, isShiftPressed in
             let rowDescriptors = Set(row.items.map(\.descriptorIndex))
             let allDescriptors = Set(
@@ -551,7 +546,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
             configureAxisRanges(chartView)
             chartView.notifyDataSetChanged()
         }
-        chartView.delegate = context.coordinator
+        selection.register(chartView)
 
         let xAxis = chartView.xAxis
         xAxis.enabled = true
@@ -593,7 +588,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
 
         configureAxisRanges(chartView)
         chartView.notifyDataSetChanged()
-        chartView.applySharedHighlight(highlightedSampleX)
+        chartView.applySharedHighlight(selection.sampleX)
     }
 
     private func configureAxes(_ chartView: MetricsLineChartView) {
@@ -642,7 +637,7 @@ struct MetricsChartSection: View {
     let capacity: Int
     let showUpdates: Bool
     let historyResetRevision: Int
-    @Binding var highlightedSampleX: Double?
+    let selection: ChartSelection
     let yAxisLabelCount: Int
     let yStart: Double
     let settingsInvalidationKey: AnyHashable
@@ -662,7 +657,7 @@ struct MetricsChartSection: View {
         capacity: Int,
         showUpdates: Bool,
         historyResetRevision: Int,
-        highlightedSampleX: Binding<Double?>,
+        selection: ChartSelection,
         yAxisLabelCount: Int = 5,
         yStart: Double = 0.0,
         settingsInvalidationKey: AnyHashable = AnyHashable(0),
@@ -672,7 +667,7 @@ struct MetricsChartSection: View {
         self.capacity = capacity
         self.showUpdates = showUpdates
         self.historyResetRevision = historyResetRevision
-        self._highlightedSampleX = highlightedSampleX
+        self.selection = selection
         self.yAxisLabelCount = yAxisLabelCount
         self.yStart = yStart
         self.settingsInvalidationKey = settingsInvalidationKey
@@ -698,7 +693,7 @@ struct MetricsChartSection: View {
                     yAxisLabelCount: yAxisLabelCount,
                     showsSampleTime: definition.showsSampleTime,
                     settingsInvalidationKey: settingsInvalidationKey,
-                    highlightedSampleX: $highlightedSampleX
+                    selection: selection
                 )
             } else {
                 VStack(alignment: .leading) {
@@ -726,7 +721,7 @@ struct MetricsChartSection: View {
             }
         }
         .onChange(of: historyResetRevision) { _, _ in
-            highlightedSampleX = nil
+            selection.select(nil)
             store.clearHistory()
             yMaxResetRevision += 1
         }
