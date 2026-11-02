@@ -247,7 +247,7 @@ private enum MetricsChartPalette {
     static let board = color(light: (0.06, 0.736, 0.14), dark: (0.18, 0.92, 0.28))
     static let package = color(light: (0.246, 0.663, 0.902), dark: (0.13, 0.48, 0.97))
     static let cpu = color(light: (0.058, 0.406, 0.892), dark: (0.32, 0.74, 0.98))
-    static let gpu = color(light: (0.92, 0.188, 0.0), dark: (1.0, 0.30, 0.10))
+    static let gpu = color(light: (0.88, 0.29, 0.59), dark: (0.96, 0.38, 0.66))
     static let ane = color(light: (0.94, 0.62, 0.0), dark: (1.0, 0.66, 0.08))
 
     static let cpuFrequencyPalette: [NSColor] = [
@@ -428,7 +428,7 @@ When usage is at 100%, the area reaches the line.
                 ),
                 MetricsSeriesDescriptor(
                     title: title,
-                    color: color.withAlphaComponent(0.3),
+                    color: color.withAlphaComponent(0.6),
                     kind: .fill,
                     chartValue: { metrics in
                         metrics.cpuTiers[index].activeRatio
@@ -464,7 +464,7 @@ When usage is at 100%, the area reaches the line.
             ),
             MetricsSeriesDescriptor(
                 title: "GPU",
-                color: color.withAlphaComponent(0.3),
+                color: color.withAlphaComponent(0.6),
                 kind: .fill,
                 chartValue: { metrics in
                     metrics.gpuActiveRatio
