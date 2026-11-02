@@ -98,7 +98,7 @@ final class AppDependencies: ObservableObject {
     @Published var socSummary: String = ""
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
-    private var metricsTask: Task<Void, Never>?
+    private var metricsSchedule: MetricsSchedule?
     private let metricsSubject = PassthroughSubject<Metrics, Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
@@ -116,43 +116,27 @@ final class AppDependencies: ObservableObject {
     }
 
     func startMetricsLoop() {
-        guard metricsTask == nil else { return }
+        if metricsSchedule != nil { return }
         metricsError = ""
+        let schedule = MetricsSchedule(interval: .milliseconds(metricsIntervalMs))
+        metricsSchedule = schedule
 
-        metricsTask = Task.detached {
-            let clock = ContinuousClock()
-            var lastUpdateStarted = clock.now
-
+        Thread.detachNewThread {
             do {
                 let sampler = try Sampler()
                 defer { sampler.close() }
 
-                while !Task.isCancelled {
-                    while true {
-                        let intervalMs = await MainActor.run { AppDependencies.shared.metricsIntervalMs }
-                        let sampleInterval = Swift.Duration.milliseconds(intervalMs)
-                        let elapsed = lastUpdateStarted.duration(to: clock.now)
-                        guard elapsed < sampleInterval else { break }
-
-                        do {
-                            try await Task.sleep(for: min(sampleInterval - elapsed, .milliseconds(500)))
-                        } catch {
-                            break
-                        }
-                    }
-
-                    guard !Task.isCancelled else { break }
-                    lastUpdateStarted = clock.now
-
+                while true {
+                    schedule.waitForNextSample()
                     let metrics = try sampler.metrics()
-                    await MainActor.run {
+                    DispatchQueue.main.async {
                         AppDependencies.shared.publish(metrics)
                     }
                 }
             } catch {
-                await MainActor.run {
+                DispatchQueue.main.async {
                     AppDependencies.shared.metricsError = String(describing: error)
-                    AppDependencies.shared.metricsTask = nil
+                    AppDependencies.shared.metricsSchedule = nil
                 }
             }
         }
@@ -214,6 +198,7 @@ final class AppDependencies: ObservableObject {
     @Published var metricsIntervalMs: Int = AppSettings.metricsIntervalMs {
         didSet {
             AppSettings.metricsIntervalMs = metricsIntervalMs
+            metricsSchedule?.setInterval(.milliseconds(metricsIntervalMs))
         }
     }
 
