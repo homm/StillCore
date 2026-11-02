@@ -203,7 +203,7 @@ enum MetricsDetailsBuilder {
             case .line:
                 descriptor.color
             case .fill:
-                descriptor.color.withAlphaComponent(0.6)
+                descriptor.color.withAlphaComponent(max(descriptor.color.alphaComponent, 0.6))
             }
 
             currentItems.append(

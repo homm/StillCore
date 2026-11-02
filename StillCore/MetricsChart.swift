@@ -15,6 +15,7 @@ struct MetricsSeriesDescriptor {
     let kind: Kind
     var lineWidth = 1.0
     let chartValue: (Metrics) -> Float
+    var stacksWithVisibleSeries = false
     var detailsValue: ((Metrics) -> Float)?
     let detailsFormatter: (Float) -> String
     var detailsGroup: String?
@@ -45,6 +46,7 @@ private struct MaterializedMetricsSample {
 
 struct MaterializedChartPoint {
     let descriptorIndex: Int
+    let chartValue: Float
     let detailsValue: Float
     let sampleDate: Date
 }
@@ -91,6 +93,7 @@ final class ChartDataController {
         )
 
         appendEntries(from: sample, series: series)
+        recalculateStackedEntries(fromIndex: dataSets.first.map { $0.count - 1 } ?? 0)
         trimToCapacity(capacity)
         updateSinglePointAppearance(series: series)
 
@@ -108,11 +111,11 @@ final class ChartDataController {
             dataSet.mode = .linear
             dataSet.drawValuesEnabled = false
             dataSet.drawCirclesEnabled = false
+            dataSet.highlightEnabled = true
+            dataSet.drawHorizontalHighlightIndicatorEnabled = false
 
             switch descriptor.kind {
             case .line:
-                dataSet.highlightEnabled = true
-                dataSet.drawHorizontalHighlightIndicatorEnabled = false
                 dataSet.drawCircleHoleEnabled = false
                 dataSet.drawFilledEnabled = false
                 dataSet.lineWidth = descriptor.lineWidth
@@ -120,7 +123,6 @@ final class ChartDataController {
                 dataSet.setColor(descriptor.color)
                 dataSet.setCircleColor(descriptor.color)
             case .fill:
-                dataSet.highlightEnabled = false
                 dataSet.lineWidth = 0
                 dataSet.drawFilledEnabled = true
                 dataSet.fillColor = descriptor.color
@@ -160,11 +162,39 @@ final class ChartDataController {
                     y: Double(sample.values[index].chartValue),
                     data: MaterializedChartPoint(
                         descriptorIndex: index,
+                        chartValue: sample.values[index].chartValue,
                         detailsValue: sample.values[index].detailsValue,
                         sampleDate: sample.sampleDate
                     )
                 )
             )
+        }
+    }
+
+    func setHiddenDescriptors(_ hiddenDescriptors: Set<Int>) {
+        for (index, dataSet) in dataSets.enumerated() {
+            dataSet.visible = !hiddenDescriptors.contains(index)
+        }
+        recalculateStackedEntries(fromIndex: 0)
+        dataSets.forEach { $0.notifyDataSetChanged() }
+        data?.notifyDataChanged()
+    }
+
+    private func recalculateStackedEntries(fromIndex: Int) {
+        let stackedDataSets = dataSets.enumerated().compactMap { index, dataSet in
+            series[index].stacksWithVisibleSeries && dataSet.isVisible ? dataSet : nil
+        }
+        if let count = stackedDataSets.first?.count {
+            for entryIndex in fromIndex..<count {
+                var total: Float = 0
+                for dataSet in stackedDataSets.reversed() {
+                    let entry = dataSet[entryIndex]
+                    if let point = entry.data as? MaterializedChartPoint {
+                        total += point.chartValue
+                        entry.y = Double(total)
+                    }
+                }
+            }
         }
     }
 
@@ -395,20 +425,6 @@ final class MetricsLineChartView: LineChartView {
         (renderer as? MetricsCurrentValuesRenderer)?.resetCurrentValuesLayout()
     }
 
-    func applyCurrentValuesVisibility() {
-        guard let data else { return }
-
-        for case let dataSet as LineChartDataSet in data.dataSets {
-            guard let point = dataSet.first?.data as? MaterializedChartPoint,
-                  series.indices.contains(point.descriptorIndex)
-            else {
-                continue
-            }
-
-            dataSet.visible = !hiddenDescriptors.contains(point.descriptorIndex)
-        }
-    }
-
     override func rightMouseDown(with event: NSEvent) {
         highlightValue(nil, callDelegate: true)
     }
@@ -540,7 +556,7 @@ private struct MetricsDGChartView: NSViewRepresentable {
                 }
             }
 
-            chartView.applyCurrentValuesVisibility()
+            controller.setHiddenDescriptors(chartView.hiddenDescriptors)
             chartView.resetCurrentValuesLayout()
             chartView.yMaxStabilizer.reset()
             configureAxisRanges(chartView)
