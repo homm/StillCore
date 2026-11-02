@@ -317,6 +317,7 @@ private enum MetricsChartDefinitions {
                     title: "SYS",
                     color: MetricsChartPalette.board,
                     kind: .line,
+                    lineWidth: 0.7,
                     chartValue: { $0.sysPower },
                     detailsFormatter: Formatters.watts
                 ),
@@ -366,7 +367,7 @@ private enum MetricsChartDefinitions {
                     title: "CPU",
                     color: MetricsChartPalette.package,
                     kind: .line,
-                    lineWidth: 2.0,
+                    lineWidth: 1.5,
                     chartValue: { $0.temp.cpuTempAvg },
                     detailsFormatter: Formatters.temperature
                 ),
@@ -374,7 +375,7 @@ private enum MetricsChartDefinitions {
                     title: "GPU",
                     color: MetricsChartPalette.gpu,
                     kind: .line,
-                    lineWidth: 2.0,
+                    lineWidth: 1.5,
                     chartValue: { $0.temp.gpuTempAvg },
                     detailsFormatter: Formatters.temperature
                 ),
@@ -420,6 +421,7 @@ When usage is at 100%, the area reaches the line.
                     title: title,
                     color: color,
                     kind: .line,
+                    lineWidth: 0.7,
                     chartValue: { metrics in
                         Float(metrics.cpuTiers[index].freqMHz) / 1000
                     },
