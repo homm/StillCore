@@ -3,6 +3,40 @@
     <channel>
         <title>StillCore</title>
         <item>
+            <title>1.5.1</title>
+            <pubDate>Tue, 03 Nov 2026 06:11:05 +0000</pubDate>
+            <sparkle:version>202611022346</sparkle:version>
+            <sparkle:shortVersionString>1.5.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[**1.5.1 colors hotfix.**
+
+## Power readings and hardware support
+
+- Restored power readings on supported Macs running macOS 27 without the background `powermetrics` service or administrator approval.
+- CHIP power now includes memory and media-engine activity where package energy counters are available. Some workloads show higher wattage because the reading covers more of the chip.
+- Fixed the GPU frequency chart dropping to zero at idle.
+- Updated to `macmon` 0.10.0 with revised CPU tier detection on M6 and support for monitoring inside macOS virtual machines.
+
+## Charts
+
+- The power chart stacks component readings so you can see how each contributes to the total.
+- Made chart series easier to distinguish with pink GPU traces, clearer shading where CPU and GPU usage overlap, and thinner lines for system power, CPU frequency, and temperature.
+- Improved performance when updating charts and dragging a chart marker.
+- **1.5.1 hotfix.** Made CHIP and CPU power easier to distinguish at low wattage in both light and dark themes.
+- **1.5.1 hotfix.** Matched the CPU temperature line to the CPU color used in the power chart.
+
+## Menu bar
+
+- Added a CPU power option.
+- CPU load now weights each tier by its maximum frequency squared, so efficiency cores contribute less to the overall reading.
+- Removed the individual CPU tier load and frequency options.
+
+**Full Changelog**: https://github.com/homm/StillCore/compare/v1.4.0...v1.5.1
+]]></description>
+            <enclosure url="https://github.com/homm/StillCore/releases/download/v1.5.1/StillCore.dmg" length="2579809" type="application/octet-stream" sparkle:edSignature="LE7l+NMHGkdrloGSE/JFv7JZt2262u2y7bk3crnzi+meeT4ZIVvu0oimrKkMGnoYxpiZpXB+iVa/0f/eleL3Dw=="/>
+        </item>
+        <item>
             <title>1.5.0</title>
             <pubDate>Mon, 02 Nov 2026 17:25:00 +0000</pubDate>
             <sparkle:version>202611022119</sparkle:version>
