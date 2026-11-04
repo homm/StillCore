@@ -30,7 +30,8 @@ struct ProcessReading: Identifiable, Sendable {
     }
 
     private func checkIdentity() throws {
-        if id.pid <= 0 || ProcessSampler.usage(id.pid)?.ri_proc_start_abstime != id.start {
+        var usage = rusage_info_v6()
+        if id.pid <= 0 || !ProcessSampler.readUsage(id.pid, into: &usage) || usage.ri_proc_start_abstime != id.start {
             throw POSIXError(.ESRCH)
         }
     }
@@ -104,12 +105,10 @@ final class ProcessSampler {
         nsPerTick = Double(scale.numer) / Double(scale.denom)
     }
 
-    static func usage(_ pid: pid_t) -> rusage_info_v6? {
-        var info = rusage_info_v6()
-        let result = withUnsafeMutablePointer(to: &info) {
-            proc_pid_rusage(pid, RUSAGE_INFO_V6, UnsafeMutableRawPointer($0).assumingMemoryBound(to: rusage_info_t?.self))
+    static func readUsage(_ pid: pid_t, into info: inout rusage_info_v6) -> Bool {
+        withUnsafeMutablePointer(to: &info) {
+            proc_pid_rusage(pid, RUSAGE_INFO_V6, UnsafeMutableRawPointer($0).assumingMemoryBound(to: rusage_info_t?.self)) == 0
         }
-        return result == 0 ? info : nil
     }
 
     func sample() -> [ProcessReading] {
@@ -122,8 +121,9 @@ final class ProcessSampler {
         let gpuTimes = Self.gpuTimes()
         var current: [ProcessReading.ID: (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)] = [:]
         var rows: [ProcessReading] = []
+        var usage = rusage_info_v6()
         for pid in pids.prefix(Int(max(count, 0))) where pid > 0 {
-            if let usage = Self.usage(pid) {
+            if Self.readUsage(pid, into: &usage) {
                 let id = ProcessReading.ID(pid: pid, start: usage.ri_proc_start_abstime)
                 let cpu = usage.ri_user_time + usage.ri_system_time
                 let gpu = gpuTimes[pid]
