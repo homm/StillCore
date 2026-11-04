@@ -1,7 +1,7 @@
 NAME := StillCore
 LOCAL ?=
 WORKSPACE ?=
-CONFIGURATION ?= Debug
+CONFIGURATION ?= $(if $(filter Release,$(MAKECMDGOALS)),Release,Debug)
 DESTINATION ?= platform=macOS,arch=arm64
 DERIVED_DATA := .build
 XCODEBUILD_FLAGS := \
@@ -30,6 +30,7 @@ APP_EXEC_PATH = $(APP_PATH)/Contents/MacOS/$(NAME)
 help:
 	@printf '%s\n' \
 		'make app            Build $(NAME).app' \
+		'Add Release to a command for CONFIGURATION=Release (e.g. make run Release)' \
 		'LOCAL=1 make app    Build with local workspace and local macmon xcframework' \
 		'make run [ARGS=...] Build and run $(NAME) in this terminal' \
 		'make open-app       Build and open $(NAME).app' \
@@ -44,6 +45,9 @@ help:
 		'make install-hooks  Use repo-managed git hooks' \
 		'make clean          Remove .build'
 
+
+.PHONY: Release
+Release: ;
 
 .PHONY: app
 app:
