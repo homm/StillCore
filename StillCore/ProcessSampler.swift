@@ -115,14 +115,19 @@ final class ProcessSampler {
         let now = mach_absolute_time()
         let ticks = Double(now - lastTime)
         lastTime = now
-        let capacity = Int(max(0, proc_listallpids(nil, 0))) + 64
+        let uid = geteuid()
+        let filter = UInt32(uid == 0 ? PROC_ALL_PIDS : PROC_UID_ONLY)
+        let pidSize = MemoryLayout<pid_t>.stride
+        let capacity = Int(max(0, proc_listpids(filter, uid, nil, 0))) / pidSize + 64
         var pids = [pid_t](repeating: 0, count: capacity)
-        let count = proc_listallpids(&pids, Int32(capacity * MemoryLayout<pid_t>.stride))
+        let bytes = proc_listpids(filter, uid, &pids, Int32(capacity * pidSize))
+        let pidCount = Int(max(bytes, 0)) / pidSize
         let gpuTimes = Self.gpuTimes()
         var current: [ProcessReading.ID: (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)] = [:]
         var rows: [ProcessReading] = []
+        rows.reserveCapacity(pidCount)
         var usage = rusage_info_v6()
-        for pid in pids.prefix(Int(max(count, 0))) where pid > 0 {
+        for pid in pids.prefix(pidCount) where pid > 0 {
             if Self.readUsage(pid, into: &usage) {
                 let id = ProcessReading.ID(pid: pid, start: usage.ri_proc_start_abstime)
                 let cpu = usage.ri_user_time + usage.ri_system_time
