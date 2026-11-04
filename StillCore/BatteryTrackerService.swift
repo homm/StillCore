@@ -13,11 +13,19 @@ enum BatteryChargeStatus {
 struct BatteryRuntimeState {
     var batteryTrackerState: BatteryTrackerState?
     var batteryStatus: BatteryStatus
+    var dischargeScale: BatteryDischargeScale?
 
     var currentPercent: Double {
-        guard batteryStatus.maxCapacityMah > 0 else { return 0 }
-        return Double(batteryStatus.currentCapacityMah) * 100.0 / Double(batteryStatus.maxCapacityMah)
+        if let percent = dischargeScale?.percent(chargeMah: batteryStatus.currentCapacityMah, fullMah: batteryStatus.maxCapacityMah) {
+            return percent
+        }
+        if let current = batteryStatus.reportedCurrentCapacity, let max = batteryStatus.reportedMaxCapacity, max > 0 {
+            return min(100, (Double(current) * 100 / Double(max)).rounded())
+        }
+        return Double(batteryStatus.currentCapacityMah) * 100 / Double(batteryStatus.maxCapacityMah)
     }
+
+    var displayedPercent: Int { max(1, Int(currentPercent.rounded(.up))) }
 
     var chargeStatus: BatteryChargeStatus {
         guard batteryStatus.isOnACPower else { return .discharging }
@@ -32,13 +40,35 @@ struct BatteryRuntimeState {
     }
 
     var usedCapacityMah: Int? {
-        guard let session = batteryTrackerState?.session else { return nil }
-        return max(0, session.startCapacityMah - batteryStatus.currentCapacityMah)
+        if let session = batteryTrackerState?.session {
+            if let start = session.startChargeMah {
+                return max(0, start - batteryStatus.currentCapacityMah)
+            }
+            // An untagged baseline above 100 cannot be a legacy percentage,
+            // even when an OS upgrade has since removed the raw keys.
+            if session.startCapacityMah > 100 || batteryStatus.rawCurrentCapacity != nil
+                || (batteryStatus.reportedMaxCapacity ?? 0) > 100 {
+                return max(0, session.startCapacityMah - batteryStatus.currentCapacityMah)
+            }
+        }
+        return nil
     }
 
     var usedPercent: Double? {
-        guard let usedCapacityMah, batteryStatus.maxCapacityMah > 0 else { return nil }
-        return Double(usedCapacityMah) * 100.0 / Double(batteryStatus.maxCapacityMah)
+        if let usedCapacityMah, batteryStatus.maxCapacityMah > 0 {
+            // Use the same full capacity at both ends: a revised capacity
+            // estimate by itself does not mean any charge was consumed.
+            if let scale = dischargeScale,
+               let start = scale.percent(chargeMah: batteryStatus.currentCapacityMah + usedCapacityMah, fullMah: batteryStatus.maxCapacityMah) {
+                return max(0, start - currentPercent)
+            }
+            return Double(usedCapacityMah) * 100.0 / Double(batteryStatus.maxCapacityMah)
+        }
+        if let session = batteryTrackerState?.session, session.startChargeMah == nil,
+           batteryStatus.reportedMaxCapacity == 100, let current = batteryStatus.reportedCurrentCapacity {
+            return Double(max(0, session.startCapacityMah - current))
+        }
+        return nil
     }
 }
 
@@ -103,9 +133,15 @@ final class BatteryTrackerService: HelperService {
         }
 
         do {
+            let battery = try BatteryStatus.read()
+            var scale = runtimeState?.dischargeScale
+            if runtimeState == nil || battery.updateTime == nil || battery.updateTime != runtimeState?.batteryStatus.updateTime {
+                scale = BatteryDischargeScale.read()
+            }
             runtimeState = BatteryRuntimeState(
                 batteryTrackerState: batteryTrackerState,
-                batteryStatus: try BatteryStatus.read()
+                batteryStatus: battery,
+                dischargeScale: scale
             )
         } catch {
             runtimeState = nil

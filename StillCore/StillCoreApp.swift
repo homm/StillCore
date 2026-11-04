@@ -650,7 +650,7 @@ struct ContentView: View {
                                 ))
                                     .padding(.vertical, -1)
                                     .foregroundStyle(.secondary)
-                                Text("\(Int(batteryState.currentPercent.rounded()))%")
+                                Text("\(batteryState.displayedPercent)%")
                                     .foregroundStyle(.secondary)
                                     .font(Font(AppFonts.batteryPercent))
                             }
@@ -765,8 +765,8 @@ struct ContentView: View {
                     case let (nil, full?): ("Full charge capacity", "\(full.formatted()) mAh")
                     case (nil, nil): nil
                     }
-                    let startingCharge = session.startCapacityMah
-                    let startingChargeUnit = battery.maxCapacityMah == 100 ? "%" : " mAh"
+                    let startingCharge = session.startChargeMah ?? session.startCapacityMah
+                    let startingChargeUnit = state.usedCapacityMah == nil ? "%" : " mAh"
                     BatteryDrainSummary(
                         percent: percent,
                         groups: [

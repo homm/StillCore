@@ -40,8 +40,9 @@ struct BatteryTrackerEngine {
         }
     }
 
-    private func update(state: BatteryTrackerState, batteryStatus: BatteryStatus, now: Date) -> BatteryTrackerState {
+    func update(state: BatteryTrackerState, batteryStatus: BatteryStatus, now: Date) -> BatteryTrackerState {
         var nextState = state
+        nextState.schemaVersion = BatteryTrackerState.currentSchemaVersion
         var session = nextState.session
 
         if let previousCheck = session?.lastCheckAt {
@@ -54,10 +55,13 @@ struct BatteryTrackerEngine {
         if batteryStatus.isOnACPower {
             session = nil
         } else {
-            if session == nil {
+            // An older writer drops startChargeMah but can preserve schemaVersion.
+            if session?.startChargeMah == nil {
                 session = BatteryTrackerSession(
                     startedAt: now,
-                    startCapacityMah: batteryStatus.currentCapacityMah,
+                    startCapacityMah: batteryStatus.rawCurrentCapacity
+                        ?? batteryStatus.reportedCurrentCapacity ?? batteryStatus.currentCapacityMah,
+                    startChargeMah: batteryStatus.currentCapacityMah,
                     sleepSeconds: 0,
                     lastCheckAt: now
                 )

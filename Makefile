@@ -88,6 +88,14 @@ test: app
 	$(DERIVED_DATA)/PowerMetricsChecks "$(APP_PATH)"
 	/bin/zsh -c 'exec -a Contents/MacOS/PowerMetricsHelper "$$1" "$$2"' \
 		-- "$(DERIVED_DATA)/PowerMetricsChecks" "$(APP_PATH)"
+	xcrun swiftc -swift-version 6 -parse-as-library \
+		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
+		BatteryTrackingShared/BatterySession.swift BatteryTrackingShared/BatteryStatus.swift \
+		BatteryTrackerHelper/BatteryTrackerEngine.swift \
+		StillCore/BatteryDischargeScale.swift \
+		StillCore/HelperService.swift StillCore/BatteryTrackerService.swift \
+		Tests/BatterySessionChecks.swift -o $(DERIVED_DATA)/BatterySessionChecks
+	$(DERIVED_DATA)/BatterySessionChecks
 
 .PHONY: profile
 PROFILE_TRACE ?= $(DERIVED_DATA)/$(NAME)-Time-Profiler.trace
