@@ -171,10 +171,8 @@ dmg: EXPORT_DIR=$(DMG_EXPORT_DIR)
 dmg: _prepare-dmg-staging-dir export-app
 	cp -R "$(DMG_EXPORT_DIR)/$(NAME).app" "$(DMG_STAGING_DIR)/"
 	rm -f "$(DMG_PATH)"
-	hdiutil create -volname "$(NAME)" \
-		-srcfolder "$(DMG_STAGING_DIR)" \
-		-ov -format UDZO \
-		"$(DMG_PATH)"
+	diskutil image create from --volumeName "$(NAME)" --format UDZO \
+		"$(DMG_STAGING_DIR)" "$(DMG_PATH)"
 
 # -------------------------------- release ---------------------------------------------
 .PHONY: _require-development-team
