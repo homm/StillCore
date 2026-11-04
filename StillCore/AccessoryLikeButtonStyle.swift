@@ -7,6 +7,7 @@ struct AccessoryLikeButtonStyle: ButtonStyle {
     var cornerRadius: CGFloat = 6
     var horizontalPadding: CGFloat = 5
     var verticalPadding: CGFloat = 3
+    var isSelected = false
 
     func makeBody(configuration: Configuration) -> some View {
         let rect = RoundedRectangle(cornerRadius: cornerRadius)
@@ -21,12 +22,15 @@ struct AccessoryLikeButtonStyle: ButtonStyle {
             .background {
                 AppKitHoverProbeView(isHovered: $isHovered)
             }
+            .onChange(of: isSelected) { _, selected in
+                if !selected { isHovered = false }
+            }
     }
 
     private func background(isPressed: Bool) -> some ShapeStyle {
         if isPressed {
             AnyShapeStyle(.quaternary)
-        } else if isHovered {
+        } else if isHovered || isSelected {
             AnyShapeStyle(.quinary)
         } else {
             AnyShapeStyle(.clear)

@@ -86,6 +86,8 @@ enum AppFonts {
         ofSize: 10, weight: .bold)
     nonisolated(unsafe) static let chartLegend = tabularSystemFont(
         ofSize: 12, weight: .medium)
+    nonisolated(unsafe) static let processValue = tabularSystemFont(
+        ofSize: 12, weight: .regular)
 }
 
 // MARK: - DI
@@ -99,7 +101,7 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsSchedule: MetricsSchedule?
-    private let metricsSubject = PassthroughSubject<Metrics, Never>()
+    private let metricsSubject = PassthroughSubject<(metrics: Metrics, processes: [ProcessReading]?), Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
     func clearChartHistory() {
@@ -107,7 +109,15 @@ final class AppDependencies: ObservableObject {
     }
 
     var metricsPublisher: AnyPublisher<Metrics, Never> {
-        metricsSubject.eraseToAnyPublisher()
+        metricsSubject.map(\.metrics).eraseToAnyPublisher()
+    }
+
+    var processPublisher: AnyPublisher<[ProcessReading], Never> {
+        metricsSubject.compactMap(\.processes).eraseToAnyPublisher()
+    }
+
+    func setProcessesVisible(_ visible: Bool) {
+        metricsSchedule?.setProcessesVisible(visible)
     }
 
     private init() {
@@ -125,12 +135,20 @@ final class AppDependencies: ObservableObject {
             do {
                 let sampler = try Sampler()
                 defer { sampler.close() }
+                var processSampler: ProcessSampler?
+                var lastShowing: UUID?
 
                 while true {
                     schedule.waitForNextSample()
                     let metrics = try sampler.metrics()
+                    let showing = schedule.processShowing
+                    if showing != lastShowing {
+                        processSampler = showing == nil ? nil : ProcessSampler()
+                        lastShowing = showing
+                    }
+                    let processes = processSampler?.sample()
                     DispatchQueue.main.async {
-                        AppDependencies.shared.publish(metrics)
+                        AppDependencies.shared.publish(metrics, processes: schedule.processShowing == showing ? processes : nil)
                     }
                 }
             } catch {
@@ -142,7 +160,7 @@ final class AppDependencies: ObservableObject {
         }
     }
 
-    private func publish(_ source: Metrics) {
+    private func publish(_ source: Metrics, processes: [ProcessReading]?) {
         var metrics = source
         // Keep CHIP above the stacked components and SYS above CHIP when reported totals disagree.
         metrics.chipPower = max(metrics.chipPower, metrics.cpuPower + metrics.anePower + metrics.gpuPower)
@@ -171,7 +189,7 @@ final class AppDependencies: ObservableObject {
                 ? effectiveFrequency / (Float(coreCount) * Float(frequency)) : 0
             metrics.cpuTiers[index] = tier
         }
-        metricsSubject.send(metrics)
+        metricsSubject.send((metrics, processes))
         if !metricsError.isEmpty {
             metricsError = ""
         }
@@ -243,7 +261,7 @@ final class AppDependencies: ObservableObject {
     private static let largeIntervalThresholdMs = 3_000
 }
 
-private enum MetricsChartPalette {
+enum MetricsChartPalette {
     static let board = color(light: (0.06, 0.736, 0.14), dark: (0.18, 0.92, 0.28))
     static let package = color(light: (0.54, 0.79, 0.94), dark: (0.08, 0.31, 0.68))
     static let packageText = color(light: (0.246, 0.663, 0.902), dark: (0.13, 0.48, 0.97))
@@ -500,6 +518,7 @@ struct ContentView: View {
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var chartSelection = ChartSelection()
+    @State private var showsProcesses = false
     @State private var isBatteryTrackerPopoverPresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
@@ -586,108 +605,90 @@ struct ContentView: View {
                 let backgroundColor = Color(.textBackgroundColor)
                     .padding(EdgeInsets(top: -8, leading: -12, bottom: -4, trailing: -12))
                 let chartSectionInsets = EdgeInsets(top: 8, leading: 0, bottom: 4, trailing: 0)
-                GeometryReader { metrics in
-                    VStack(spacing: 0) {
-                        MetricsChartSection(
-                            definition: MetricsChartDefinitions.power,
-                            metricsPublisher: dependencies.metricsPublisher,
-                            capacity: AppPresentation.chartHistoryCapacity,
-                            showUpdates: presentationState.isWindowVisible,
-                            historyResetRevision: dependencies.chartHistoryResetRevision,
-                            selection: chartSelection
-                        )
-                            .frame(height: metrics.size.height * 0.35)
-                            .background(backgroundColor)
-                            .padding(chartSectionInsets)
-
-                        MetricsChartSection(
-                            definition: MetricsChartDefinitions.frequency,
-                            metricsPublisher: dependencies.metricsPublisher,
-                            capacity: AppPresentation.chartHistoryCapacity,
-                            showUpdates: presentationState.isWindowVisible,
-                            historyResetRevision: dependencies.chartHistoryResetRevision,
-                            selection: chartSelection,
-                            settingsInvalidationKey: AnyHashable(dependencies.frequencyUsageByCores),
-                            settingsView: AnyView(
-                                Toggle(
-                                    "CPU usage by cores",
-                                    isOn: $dependencies.frequencyUsageByCores
-                                )
-                                    .padding(12)
+                VStack(spacing: 0) {
+                    GeometryReader { metrics in
+                        let chartHeight = metrics.size.height - 3 * (chartSectionInsets.top + chartSectionInsets.bottom)
+                        VStack(spacing: 0) {
+                            MetricsChartSection(
+                                definition: MetricsChartDefinitions.power,
+                                metricsPublisher: dependencies.metricsPublisher,
+                                capacity: AppPresentation.chartHistoryCapacity,
+                                showUpdates: presentationState.isWindowVisible,
+                                historyResetRevision: dependencies.chartHistoryResetRevision,
+                                selection: chartSelection
                             )
-                        )
-                            .frame(height: metrics.size.height * 0.35)
-                            .background(backgroundColor)
-                            .padding(chartSectionInsets)
+                                .frame(height: max(0, chartHeight) * 0.35)
+                                .background(backgroundColor)
+                                .padding(chartSectionInsets)
 
-                        MetricsChartSection(
-                            definition: MetricsChartDefinitions.temperature,
-                            metricsPublisher: dependencies.metricsPublisher,
-                            capacity: AppPresentation.chartHistoryCapacity,
-                            showUpdates: presentationState.isWindowVisible,
-                            historyResetRevision: dependencies.chartHistoryResetRevision,
-                            selection: chartSelection,
-                            yAxisLabelCount: 4,
-                            yStart: 30
-                        )
-                            .background(backgroundColor)
-                            .padding(chartSectionInsets)
+                            MetricsChartSection(
+                                definition: MetricsChartDefinitions.frequency,
+                                metricsPublisher: dependencies.metricsPublisher,
+                                capacity: AppPresentation.chartHistoryCapacity,
+                                showUpdates: presentationState.isWindowVisible,
+                                historyResetRevision: dependencies.chartHistoryResetRevision,
+                                selection: chartSelection,
+                                settingsInvalidationKey: AnyHashable(dependencies.frequencyUsageByCores),
+                                settingsView: AnyView(
+                                    Toggle(
+                                        "CPU usage by cores",
+                                        isOn: $dependencies.frequencyUsageByCores
+                                    )
+                                        .padding(12)
+                                )
+                            )
+                                .frame(height: max(0, chartHeight) * 0.35)
+                                .background(backgroundColor)
+                                .padding(chartSectionInsets)
+
+                            MetricsChartSection(
+                                definition: MetricsChartDefinitions.temperature,
+                                metricsPublisher: dependencies.metricsPublisher,
+                                capacity: AppPresentation.chartHistoryCapacity,
+                                showUpdates: presentationState.isWindowVisible,
+                                historyResetRevision: dependencies.chartHistoryResetRevision,
+                                selection: chartSelection,
+                                yAxisLabelCount: 4,
+                                yStart: 30
+                            )
+                                .background(backgroundColor)
+                                .padding(chartSectionInsets)
+                        }
+                    }
+                    ProcessList(
+                        presentationState: presentationState,
+                        processPublisher: dependencies.processPublisher,
+                        isExpanded: showsProcesses
+                    )
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        presentationState.onMinimumContentHeightChange?(AppPresentation.windowMinSize.height + height)
                     }
                 }
             }
 
-            if BatteryTrackerService.isBatteryAvailable {
+            if BatteryTrackerService.isBatteryAvailable || dependencies.metricsError.isEmpty {
                 HStack(spacing: 8) {
-                    if let batteryState = batteryTrackerService.runtimeState {
-                        Button {
-                            batteryEnergyModeMenuController.showMenu()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(nsImage: BatteryIndicatorImage.make(
-                                    state: batteryState,
-                                    usesSecondaryMask: false
-                                ))
-                                    .padding(.vertical, -1)
-                                    .foregroundStyle(.secondary)
-                                Text("\(batteryState.displayedPercent)%")
-                                    .foregroundStyle(.secondary)
-                                    .font(Font(AppFonts.batteryPercent))
-                            }
-                        }
-                            .buttonStyle(AccessoryLikeButtonStyle())
-                            .background {
-                                BatteryEnergyModeMenuAnchor(
-                                    controller: batteryEnergyModeMenuController,
-                                    batteryState: batteryState,
-                                    openBatterySettings: {
-                                        batteryTrackerService.openBatterySettings()
-                                    }
-                                )
-                            }
-                            .help("Energy mode")
-                            .padding(.leading, -7)
-                            .padding(.trailing, -5)
-                            .padding(.vertical, -4)
-                    }
-
-                    BatteryStatusLabel(state: batteryTrackerService.runtimeState, trackerRunning: batteryTrackerService.status == .running)
-                        .foregroundStyle(.secondary)
-
-                    if batteryTrackerService.status != .running {
-                        Button {
-                            isBatteryTrackerPopoverPresented.toggle()
-                        } label: {
-                            Image(systemName: "exclamationmark.circle")
-                                .font(AppFonts.helpIcon)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Battery tracker")
-                        .popover(isPresented: $isBatteryTrackerPopoverPresented, arrowEdge: .bottom) {
-                            BatteryTrackerPopover(service: batteryTrackerService)
-                        }
+                    if BatteryTrackerService.isBatteryAvailable {
+                        batteryControls
                     }
                     Spacer(minLength: 0)
+                    if dependencies.metricsError.isEmpty {
+                        Button {
+                            showsProcesses.toggle()
+                        } label: {
+                            HStack(spacing: 0) {
+                                Text("Top processes")
+                                Image(systemName: showsProcesses ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .offset(y: 1)
+                                    .padding(.leading, 2)
+                            }
+                            .fixedSize()
+                        }
+                        .buttonStyle(AccessoryLikeButtonStyle(isSelected: showsProcesses))
+                        .accessibilityLabel("Top processes")
+                        .accessibilityValue(showsProcesses ? "Expanded" : "Collapsed")
+                    }
                 }
                 .frame(height: BatteryIndicatorImage.size.height)
             }
@@ -699,6 +700,59 @@ struct ContentView: View {
                 Color(.textBackgroundColor)
                     .frame(height: 12)
                     .allowsHitTesting(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var batteryControls: some View {
+        if let batteryState = batteryTrackerService.runtimeState {
+            Button {
+                batteryEnergyModeMenuController.showMenu()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(nsImage: BatteryIndicatorImage.make(
+                        state: batteryState,
+                        usesSecondaryMask: false
+                    ))
+                        .padding(.vertical, -1)
+                        .foregroundStyle(.secondary)
+                    Text("\(batteryState.displayedPercent)%")
+                        .foregroundStyle(.secondary)
+                        .font(Font(AppFonts.batteryPercent))
+                }
+            }
+                .buttonStyle(AccessoryLikeButtonStyle())
+                .background {
+                    BatteryEnergyModeMenuAnchor(
+                        controller: batteryEnergyModeMenuController,
+                        batteryState: batteryState,
+                        openBatterySettings: {
+                            batteryTrackerService.openBatterySettings()
+                        }
+                    )
+                }
+                .help("Energy mode")
+                .padding(.leading, -7)
+                .padding(.trailing, -5)
+                .padding(.vertical, -4)
+        }
+
+        BatteryStatusLabel(state: batteryTrackerService.runtimeState, trackerRunning: batteryTrackerService.status == .running)
+            .foregroundStyle(.secondary)
+
+        if batteryTrackerService.status != .running {
+            Button {
+                isBatteryTrackerPopoverPresented.toggle()
+            } label: {
+                Image(systemName: "exclamationmark.circle")
+                    .font(AppFonts.helpIcon)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Battery tracker")
+            .popover(isPresented: $isBatteryTrackerPopoverPresented, arrowEdge: .bottom) {
+                BatteryTrackerPopover(service: batteryTrackerService)
             }
         }
     }
