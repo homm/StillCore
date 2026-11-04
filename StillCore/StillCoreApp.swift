@@ -571,7 +571,7 @@ struct ContentView: View {
                     Image(systemName: "power")
                 }
             }
-            .padding(.leading, presentationState.mode == .floating ? 76 : 0)
+            .padding(.leading, presentationState.mode == .floating ? 84 : 0)
 
             if !dependencies.metricsError.isEmpty {
                 Text("Macmon error: \(dependencies.metricsError)")

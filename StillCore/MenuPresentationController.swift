@@ -100,6 +100,22 @@ private final class FloatingWindow: NSWindow {
         toolbarStyle = .unifiedCompact
         showsToolbarButton = false
     }
+
+    override func layoutIfNeeded() {
+        super.layoutIfNeeded()
+
+        // Center the window controls on the floating header, 24 points from the top.
+        let centerInWindow = NSPoint(x: 0, y: frame.height - 24)
+        for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            if let button = standardWindowButton(type), let container = button.superview {
+                let centerY = container.convert(centerInWindow, from: nil).y
+                let origin = NSPoint(x: button.frame.minX, y: centerY - button.frame.height / 2)
+                if button.frame.origin != origin {
+                    button.setFrameOrigin(origin)
+                }
+            }
+        }
+    }
 }
 
 @MainActor
