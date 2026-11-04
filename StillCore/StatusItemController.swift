@@ -95,12 +95,8 @@ final class StatusItemController: NSObject {
         String(format: "%4.1f%%", locale: FormatLocale.posix, value * 100.0)
     }
 
-    private func formatStatusItemPercent(_ value: Double) -> String {
-        String(format: "%3.0f%%", locale: FormatLocale.posix, value)
-    }
-
     private func formatStatusItemBatteryPercent(_ state: BatteryRuntimeState) -> String? {
-        formatStatusItemPercent(state.currentPercent)
+        String(format: "%3d%%", locale: FormatLocale.posix, state.displayedPercent)
     }
 
     private func formatStatusItemMemoryGb(_ valueGb: Double) -> String {

@@ -13,6 +13,12 @@ enum BatteryStatusError: LocalizedError {
 }
 
 struct BatteryStatus {
+    var updateTime: Int?
+    var rawCurrentCapacity: Int?
+    var reportedCurrentCapacity: Int?
+    var reportedMaxCapacity: Int?
+    var remainingCapacity: Int?
+    var fullChargeCapacity: Int?
     var currentCapacityMah: Int
     var maxCapacityMah: Int
     var isOnACPower: Bool
@@ -36,11 +42,31 @@ struct BatteryStatus {
         }
         defer { IOObjectRelease(entry) }
 
+        let rawCurrent = intProperty(entry: entry, key: "AppleRawCurrentCapacity")
+        let rawMax = intProperty(entry: entry, key: "AppleRawMaxCapacity")
+        let reportedCurrent = intProperty(entry: entry, key: "CurrentCapacity")
+        let reportedMax = intProperty(entry: entry, key: "MaxCapacity")
+        let batteryData = IORegistryEntryCreateCFProperty(
+            entry, "BatteryData" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? [String: Any]
+        let remaining = batteryData?["RemainingCapacity"] as? Int
+        let full = batteryData?["FullChargeCapacity"] as? Int
+        let currentCapacity: Int
+        let maxCapacity: Int
+        if let rawCurrent, let rawMax, rawMax > 0 {
+            currentCapacity = rawCurrent
+            maxCapacity = rawMax
+        } else if let remaining, let full, full > 0 {
+            currentCapacity = remaining
+            maxCapacity = full
+        } else if let reportedCurrent, let reportedMax, reportedMax > 100 {
+            // Older drivers can publish mAh directly in the top-level pair.
+            currentCapacity = reportedCurrent
+            maxCapacity = reportedMax
+        } else {
+            throw BatteryStatusError.unavailable
+        }
         guard
-            let currentCapacity = intProperty(entry: entry, key: "AppleRawCurrentCapacity")
-                ?? intProperty(entry: entry, key: "CurrentCapacity"),
-            let maxCapacity = intProperty(entry: entry, key: "AppleRawMaxCapacity")
-                ?? intProperty(entry: entry, key: "MaxCapacity"),
             boolProperty(entry: entry, key: "BatteryInstalled") == true,
             let isOnACPower = boolProperty(entry: entry, key: "ExternalConnected"),
             let isCharging = boolProperty(entry: entry, key: "IsCharging"),
@@ -50,6 +76,12 @@ struct BatteryStatus {
         }
 
         return BatteryStatus(
+            updateTime: intProperty(entry: entry, key: "UpdateTime"),
+            rawCurrentCapacity: rawCurrent,
+            reportedCurrentCapacity: reportedCurrent,
+            reportedMaxCapacity: reportedMax,
+            remainingCapacity: remaining,
+            fullChargeCapacity: full,
             currentCapacityMah: currentCapacity,
             maxCapacityMah: maxCapacity,
             isOnACPower: isOnACPower,
