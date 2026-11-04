@@ -95,7 +95,9 @@ final class ProcessSampler {
         }
     }
 
-    private var previous: [ProcessReading.ID: (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)] = [:]
+    private typealias Counters = (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)
+    private var previous: [ProcessReading.ID: Counters] = [:]
+    private var current: [ProcessReading.ID: Counters] = [:]
     private var lastTime = mach_absolute_time()
     private let nsPerTick: Double
 
@@ -123,7 +125,6 @@ final class ProcessSampler {
         let bytes = proc_listpids(filter, uid, &pids, Int32(capacity * pidSize))
         let pidCount = Int(max(bytes, 0)) / pidSize
         let gpuTimes = Self.gpuTimes()
-        var current: [ProcessReading.ID: (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)] = [:]
         var rows: [ProcessReading] = []
         rows.reserveCapacity(pidCount)
         var usage = rusage_info_v6()
@@ -152,7 +153,8 @@ final class ProcessSampler {
                 current[id] = (cpu, energy, gpu, qos)
             }
         }
-        previous = current
+        swap(&previous, &current)
+        current.removeAll(keepingCapacity: true)
         return rows
     }
 
