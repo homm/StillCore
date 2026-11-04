@@ -18,20 +18,23 @@ private final class ProcessMenuItem: NSMenuItem {
 
 private struct ProcessMenuButton: NSViewRepresentable {
     let label: String
-    let makeMenu: () -> NSMenu
+    let makeMenu: () -> NSMenu?
     var select: (() -> Void)? = nil
 
     final class RowButton: NSButton {
-        var makeMenu: (() -> NSMenu)?
+        var makeMenu: (() -> NSMenu?)?
         var select: (() -> Void)?
 
-        override func menu(for event: NSEvent) -> NSMenu? { makeMenu?() }
+        override func menu(for event: NSEvent) -> NSMenu? {
+            select?()
+            return makeMenu?()
+        }
 
         @objc func activate() {
             if let select {
                 select()
             } else {
-                makeMenu?().popUp(positioning: nil, at: NSPoint(x: bounds.minX, y: bounds.maxY), in: self)
+                makeMenu?()?.popUp(positioning: nil, at: NSPoint(x: bounds.minX, y: bounds.maxY), in: self)
             }
         }
     }
@@ -50,6 +53,7 @@ private struct ProcessMenuButton: NSViewRepresentable {
 
     func updateNSView(_ button: RowButton, context: Context) {
         button.makeMenu = makeMenu
+        button.isEnabled = context.environment.isEnabled
         button.select = select
         button.setAccessibilityLabel(label)
     }
@@ -91,7 +95,6 @@ struct ProcessList: View {
     @State private var readings: [ProcessReading] = []
     @State private var sortColumn = Column.power
     @State private var selectedProcessID: ProcessReading.ID?
-    @State private var hoveredProcessID: ProcessReading.ID?
     @State private var errorMessage: String?
 
     private var sortedReadings: [ProcessReading] {
@@ -120,7 +123,6 @@ struct ProcessList: View {
         .onChange(of: isExpanded) { _, expanded in
             if !expanded {
                 selectedProcessID = nil
-                hoveredProcessID = nil
             }
             AppDependencies.shared.setProcessesVisible(expanded && presentationState.isWindowVisible)
             readings = []
@@ -143,7 +145,8 @@ struct ProcessList: View {
 
     private var processTable: some View {
         var topReadings = Array(sortedReadings.prefix(7))
-        if let selectedProcess = readings.first(where: { $0.id == selectedProcessID }),
+        let selectedProcess = readings.first { $0.id == selectedProcessID }
+        if let selectedProcess,
            !topReadings.contains(where: { $0.id == selectedProcess.id }) {
             topReadings = Array(topReadings.prefix(6)) + [selectedProcess]
         }
@@ -156,6 +159,11 @@ struct ProcessList: View {
             HStack(spacing: 4) {
                 Text("Process")
                     .frame(maxWidth: .infinity, alignment: .leading)
+                ProcessMenuButton(label: selectedProcess.map { "Actions for \($0.name)" } ?? "Process actions") {
+                    selectedProcess.map { processMenu(for: $0) }
+                }
+                .frame(width: 20, height: 22)
+                .disabled(selectedProcess == nil)
                 ForEach(Column.allCases, id: \.self) { column in
                     Button {
                         sortColumn = column
@@ -220,10 +228,6 @@ struct ProcessList: View {
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .allowsHitTesting(false)
-                if selected || hoveredProcessID == process.id {
-                    ProcessMenuButton(label: "Actions for \(process.name)", makeMenu: { processMenu(for: process) })
-                        .frame(width: 20, height: 22)
-                }
                 ForEach(Column.allCases, id: \.self) { column in
                     let metric = formatted(process, column: column, selected: selected)
                     metric.text
@@ -247,13 +251,6 @@ struct ProcessList: View {
         .background {
             RoundedRectangle(cornerRadius: 4)
                 .fill(selected ? Color(nsColor: .selectedTextBackgroundColor).opacity(0.60) : Color.primary.opacity(shaded ? 0.035 : 0))
-        }
-        .onHover { hovering in
-            if hovering {
-                hoveredProcessID = process.id
-            } else if hoveredProcessID == process.id {
-                hoveredProcessID = nil
-            }
         }
         .help("\(process.name) (PID \(process.id.pid))")
     }
