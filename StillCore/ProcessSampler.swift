@@ -8,15 +8,30 @@ struct ProcessReading: Identifiable, Sendable {
     }
 
     let id: ID
-    let name: String
     let isBackground: Bool
     let cpu: Double?
     let gpu: Double?
     let memory: UInt64
     let power: Double?
 
+    func displayName(using path: inout [CChar]) -> String {
+        let length = proc_pidpath(id.pid, &path, UInt32(path.count))
+        if length > 0 {
+            return path.withUnsafeBytes { buffer in
+                let bytes = buffer.prefix(Int(length)).prefix { $0 != 0 }
+                let start = bytes.lastIndex(of: 0x2F).map { $0 + 1 } ?? bytes.startIndex
+                return String(decoding: bytes[start...], as: UTF8.self)
+            }
+        }
+        let nameLength = proc_name(id.pid, &path, UInt32(path.count))
+        return nameLength > 0 ? path.withUnsafeBytes {
+            String(decoding: $0.prefix(Int(nameLength)).prefix { $0 != 0 }, as: UTF8.self)
+        } : String(id.pid)
+    }
+
     private func checkIdentity() throws {
-        if id.pid <= 0 || ProcessSampler.usage(id.pid)?.ri_proc_start_abstime != id.start {
+        var usage = rusage_info_v6()
+        if id.pid <= 0 || !ProcessSampler.readUsage(id.pid, into: &usage) || usage.ri_proc_start_abstime != id.start {
             throw POSIXError(.ESRCH)
         }
     }
@@ -80,7 +95,9 @@ final class ProcessSampler {
         }
     }
 
-    private var previous: [ProcessReading.ID: (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)] = [:]
+    private typealias Counters = (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)
+    private var previous: [ProcessReading.ID: Counters] = [:]
+    private var current: [ProcessReading.ID: Counters] = [:]
     private var lastTime = mach_absolute_time()
     private let nsPerTick: Double
 
@@ -90,41 +107,33 @@ final class ProcessSampler {
         nsPerTick = Double(scale.numer) / Double(scale.denom)
     }
 
-    static func usage(_ pid: pid_t) -> rusage_info_v6? {
-        var info = rusage_info_v6()
-        let result = withUnsafeMutablePointer(to: &info) {
-            proc_pid_rusage(pid, RUSAGE_INFO_V6, UnsafeMutableRawPointer($0).assumingMemoryBound(to: rusage_info_t?.self))
+    static func readUsage(_ pid: pid_t, into info: inout rusage_info_v6) -> Bool {
+        withUnsafeMutablePointer(to: &info) {
+            proc_pid_rusage(pid, RUSAGE_INFO_V6, UnsafeMutableRawPointer($0).assumingMemoryBound(to: rusage_info_t?.self)) == 0
         }
-        return result == 0 ? info : nil
     }
 
     func sample() -> [ProcessReading] {
         let now = mach_absolute_time()
         let ticks = Double(now - lastTime)
         lastTime = now
-        let capacity = Int(max(0, proc_listallpids(nil, 0))) + 64
+        let uid = geteuid()
+        let filter = UInt32(uid == 0 ? PROC_ALL_PIDS : PROC_UID_ONLY)
+        let pidSize = MemoryLayout<pid_t>.stride
+        let capacity = Int(max(0, proc_listpids(filter, uid, nil, 0))) / pidSize + 64
         var pids = [pid_t](repeating: 0, count: capacity)
-        let count = proc_listallpids(&pids, Int32(capacity * MemoryLayout<pid_t>.stride))
+        let bytes = proc_listpids(filter, uid, &pids, Int32(capacity * pidSize))
+        let pidCount = Int(max(bytes, 0)) / pidSize
         let gpuTimes = Self.gpuTimes()
-        var current: [ProcessReading.ID: (cpu: UInt64, energy: UInt64, gpu: UInt64?, qos: QoSActivity)] = [:]
         var rows: [ProcessReading] = []
-        for pid in pids.prefix(Int(max(count, 0))) where pid > 0 {
-            if let usage = Self.usage(pid) {
+        rows.reserveCapacity(pidCount)
+        var usage = rusage_info_v6()
+        for pid in pids.prefix(pidCount) where pid > 0 {
+            if Self.readUsage(pid, into: &usage) {
                 let id = ProcessReading.ID(pid: pid, start: usage.ri_proc_start_abstime)
                 let cpu = usage.ri_user_time + usage.ri_system_time
                 let gpu = gpuTimes[pid]
                 let energy = usage.ri_energy_nj
-                let processName: String
-                var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-                let pathLength = proc_pidpath(pid, &path, UInt32(path.count))
-                if pathLength > 0 {
-                    let executablePath = String(decoding: path.prefix(Int(pathLength)).prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
-                    processName = URL(fileURLWithPath: executablePath).lastPathComponent
-                } else {
-                    var name = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-                    let length = proc_name(pid, &name, UInt32(name.count))
-                    processName = length > 0 ? String(decoding: name.prefix(Int(length)).prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) : String(pid)
-                }
                 let old = previous[id]
                 let qos = QoSActivity(usage: usage, previous: old?.qos)
                 func rate(_ value: UInt64, _ baseline: UInt64?, _ factor: Double) -> Double? {
@@ -135,7 +144,6 @@ final class ProcessSampler {
                 }
                 rows.append(ProcessReading(
                     id: id,
-                    name: processName,
                     isBackground: qos.isBackground,
                     cpu: rate(cpu, old?.cpu, 100),
                     gpu: gpu.flatMap { rate($0, old?.gpu, 100 / nsPerTick) }.map { min($0, 100) },
@@ -145,7 +153,8 @@ final class ProcessSampler {
                 current[id] = (cpu, energy, gpu, qos)
             }
         }
-        previous = current
+        swap(&previous, &current)
+        current.removeAll(keepingCapacity: true)
         return rows
     }
 
@@ -163,11 +172,13 @@ final class ProcessSampler {
             defer { IOObjectRelease(clients) }
             while case let client = IOIteratorNext(clients), client != 0 {
                 defer { IOObjectRelease(client) }
-                let creator = IORegistryEntryCreateCFProperty(client, "IOUserClientCreator" as CFString, nil, 0)?.takeRetainedValue() as? String
-                if let creator, creator.hasPrefix("pid "),
+                var properties: Unmanaged<CFMutableDictionary>?
+                if IORegistryEntryCreateCFProperties(client, &properties, nil, 0) != KERN_SUCCESS { continue }
+                let clientProperties = properties!.takeRetainedValue() as NSDictionary
+                if let creator = clientProperties["IOUserClientCreator"] as? String, creator.hasPrefix("pid "),
                    let pid = pid_t(creator.dropFirst(4).prefix { $0.isNumber }),
-                   let usage = IORegistryEntryCreateCFProperty(client, "AppUsage" as CFString, nil, 0)?.takeRetainedValue() as? [[String: Any]] {
-                    for entry in usage {
+                   let usage = clientProperties["AppUsage"] as? NSArray {
+                    for case let entry as NSDictionary in usage {
                         if let time = entry["accumulatedGPUTime"] as? UInt64 {
                             times[pid, default: 0] += time
                         }

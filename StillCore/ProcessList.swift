@@ -98,9 +98,10 @@ struct ProcessList: View {
     @State private var errorMessage: String?
 
     private var sortedReadings: [ProcessReading] {
-        readings.sorted { lhs, rhs in
-            let left = value(lhs, column: sortColumn)
-            let right = value(rhs, column: sortColumn)
+        let column = sortColumn
+        return readings.sorted { lhs, rhs in
+            let left = value(lhs, column: column)
+            let right = value(rhs, column: column)
             if left != right {
                 if let left, let right {
                     return left > right
@@ -151,6 +152,9 @@ struct ProcessList: View {
             topReadings = Array(topReadings.prefix(6)) + [selectedProcess]
         }
         let cpuFont = sortColumn == .cpu ? AppFonts.chartLegend : AppFonts.processValue
+        var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        let names = topReadings.map { $0.displayName(using: &path) }
+        let selectedIndex = topReadings.firstIndex { $0.id == selectedProcessID }
         let cpuWidth = topReadings.reduce(Column.cpu.width) { width, process in
             let text = process.cpu.map { String(format: "%.1f%%", $0) } ?? "—"
             return max(width, ceil((text as NSString).size(withAttributes: [.font: cpuFont]).width))
@@ -159,8 +163,8 @@ struct ProcessList: View {
             HStack(spacing: 4) {
                 Text("Process")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                ProcessMenuButton(label: selectedProcess.map { "Actions for \($0.name)" } ?? "Process actions") {
-                    selectedProcess.map { processMenu(for: $0) }
+                ProcessMenuButton(label: selectedIndex.map { "Actions for \(names[$0])" } ?? "Process actions") {
+                    selectedIndex.map { processMenu(for: topReadings[$0], name: names[$0]) }
                 }
                 .frame(width: 20, height: 22)
                 .disabled(selectedProcess == nil)
@@ -193,7 +197,7 @@ struct ProcessList: View {
                 .padding(.vertical, 3)
 
             ForEach(Array(topReadings.enumerated()), id: \.element.id) { index, process in
-                processRow(process, shaded: !index.isMultiple(of: 2), cpuWidth: cpuWidth)
+                processRow(process, name: names[index], shaded: !index.isMultiple(of: 2), cpuWidth: cpuWidth)
             }
             if readings.isEmpty {
                 Text("Sampling processes…")
@@ -212,17 +216,17 @@ struct ProcessList: View {
         .font(Font(AppFonts.chartLegend))
     }
 
-    private func processRow(_ process: ProcessReading, shaded: Bool, cpuWidth: CGFloat) -> some View {
+    private func processRow(_ process: ProcessReading, name: String, shaded: Bool, cpuWidth: CGFloat) -> some View {
         let selected = selectedProcessID == process.id
         return ZStack {
-            ProcessMenuButton(label: process.name, makeMenu: { processMenu(for: process) }) {
+            ProcessMenuButton(label: name, makeMenu: { processMenu(for: process, name: name) }) {
                 selectedProcessID = process.id
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityAddTraits(selected ? [.isSelected] : [])
 
             HStack(spacing: 4) {
-                Text(process.name)
+                Text(name)
                     .foregroundStyle(process.isBackground ? Color(nsColor: .secondaryLabelColor) : selected ? Color(nsColor: .selectedTextColor) : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -252,20 +256,20 @@ struct ProcessList: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(selected ? Color(nsColor: .selectedTextBackgroundColor).opacity(0.60) : Color.primary.opacity(shaded ? 0.035 : 0))
         }
-        .help("\(process.name) (PID \(process.id.pid))")
+        .help("\(name) (PID \(process.id.pid))")
     }
 
-    private func processMenu(for process: ProcessReading) -> NSMenu {
+    private func processMenu(for process: ProcessReading, name: String) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.addItem(NSMenuItem.sectionHeader(title: "\(process.name) (PID \(process.id.pid))"))
+        menu.addItem(NSMenuItem.sectionHeader(title: "\(name) (PID \(process.id.pid))"))
         let policy = process.externalBackgroundPolicy
         let background = ProcessMenuItem("Background task policy") {
             if let policy {
                 do {
                     try process.setBackgroundPolicy(!policy)
                 } catch {
-                    errorMessage = "Could not change background policy for \(process.name): \(error.localizedDescription)"
+                    errorMessage = "Could not change background policy for \(name): \(error.localizedDescription)"
                 }
             }
         }
@@ -274,22 +278,22 @@ struct ProcessList: View {
         menu.addItem(background)
         menu.addItem(.separator())
         menu.addItem(ProcessMenuItem("Terminate…") {
-            confirmTermination(of: process, force: false)
+            confirmTermination(of: process, name: name, force: false)
         })
         let forceKill = ProcessMenuItem("Force Kill…") {
-            confirmTermination(of: process, force: true)
+            confirmTermination(of: process, name: name, force: true)
         }
         forceKill.attributedTitle = NSAttributedString(string: forceKill.title, attributes: [.foregroundColor: NSColor.systemRed])
         menu.addItem(forceKill)
         return menu
     }
 
-    private func confirmTermination(of process: ProcessReading, force: Bool) {
+    private func confirmTermination(of process: ProcessReading, name: String, force: Bool) {
         let action = force ? "Force Kill" : "Terminate"
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = force ? "Force kill process?" : "Terminate process?"
-        alert.informativeText = "\(process.name) (PID \(process.id.pid))\nUnsaved changes may be lost."
+        alert.informativeText = "\(name) (PID \(process.id.pid))\nUnsaved changes may be lost."
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: action).hasDestructiveAction = true
         if presentationState.mode == .attached {
@@ -302,7 +306,7 @@ struct ProcessList: View {
             do {
                 try process.send(signal: force ? SIGKILL : SIGTERM)
             } catch {
-                errorMessage = "Could not \(action.lowercased()) \(process.name): \(error.localizedDescription)"
+                errorMessage = "Could not \(action.lowercased()) \(name): \(error.localizedDescription)"
             }
         }
     }

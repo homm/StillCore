@@ -48,10 +48,6 @@ enum AppPresentation {
     static let chartHistoryCapacity = 200
 }
 
-enum FormatLocale {
-    static let posix = Locale(identifier: "en_US_POSIX")
-}
-
 enum AppFonts {
     static func tabularSystemFont(
         ofSize fontSize: CGFloat,
@@ -301,19 +297,19 @@ enum MetricsChartPalette {
 private enum MetricsChartDefinitions {
     private enum Formatters {
         static func watts(_ value: Float) -> String {
-            String(format: "%.2f", locale: FormatLocale.posix, value)
+            String(format: "%.2f", value)
         }
 
         static func frequencyGHz(_ value: Float) -> String {
-            String(format: "%.2f", locale: FormatLocale.posix, value)
+            String(format: "%.2f", value)
         }
 
         static func usage(_ value: Float) -> String {
-            String(format: "%.1f%%", locale: FormatLocale.posix, value * 100.0)
+            String(format: "%.1f%%", value * 100.0)
         }
 
         static func temperature(_ value: Float) -> String {
-            String(format: "%.1f", locale: FormatLocale.posix, value)
+            String(format: "%.1f", value)
         }
     }
 

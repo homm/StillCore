@@ -84,23 +84,23 @@ final class StatusItemController: NSObject {
     }
 
     private func formatStatusItemPower(_ value: Double) -> String {
-        String(format: "%4.1f W", locale: FormatLocale.posix, value)
+        String(format: "%4.1f W", value)
     }
 
     private func formatStatusItemTemperature(_ value: Double) -> String {
-        String(format: "%2.0f °C", locale: FormatLocale.posix, value)
+        String(format: "%2.0f °C", value)
     }
 
     private func formatStatusItemUsage(_ value: Double) -> String {
-        String(format: "%4.1f%%", locale: FormatLocale.posix, value * 100.0)
+        String(format: "%4.1f%%", value * 100.0)
     }
 
     private func formatStatusItemBatteryPercent(_ state: BatteryRuntimeState) -> String? {
-        String(format: "%3d%%", locale: FormatLocale.posix, state.displayedPercent)
+        String(format: "%3d%%", state.displayedPercent)
     }
 
     private func formatStatusItemMemoryGb(_ valueGb: Double) -> String {
-        String(format: "%4.1f GB", locale: FormatLocale.posix, valueGb)
+        String(format: "%4.1f GB", valueGb)
     }
 
     private func buildStatusItemMenu() {
