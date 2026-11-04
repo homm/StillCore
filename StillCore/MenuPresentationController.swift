@@ -12,6 +12,8 @@ final class MenuPresentationState: ObservableObject {
     @Published private(set) var isWindowVisible: Bool = false
 
     fileprivate var onModeChange: (() -> Void)?
+    var isConfirmingProcessTermination = false
+    var onMinimumContentHeightChange: ((CGFloat) -> Void)?
 
     func setPresentationMode(_ mode: PresentationMode) {
         guard self.mode != mode else { return }
@@ -156,6 +158,22 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
         configureWindow?(floatingWindow)
         floatingWindow.center()
         floatingWindow.setFrameAutosaveName("StillCoreFloatingWindow")
+        presentationState.onMinimumContentHeightChange = { [weak self] height in
+            if let self {
+                for window in [self.attachedWindow as NSWindow, self.floatingWindow] {
+                    let minimumSize = NSSize(width: window.contentMinSize.width, height: ceil(height))
+                    let previousMinimum = window.frameRect(forContentRect: NSRect(origin: .zero, size: window.contentMinSize)).height
+                    let minimum = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumSize)).height
+                    var frame = window.frame
+                    window.contentMinSize = minimumSize
+                    if frame.height < minimum || frame.height == previousMinimum {
+                        frame.origin.y += frame.height - minimum
+                        frame.size.height = minimum
+                        window.setFrame(frame, display: window.isVisible)
+                    }
+                }
+            }
+        }
         configureStatusItemAction()
 
         presentationState.onModeChange = { [weak self] in
@@ -275,8 +293,14 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        if presentationMode == .attached {
+        if presentationMode == .attached && !presentationState.isConfirmingProcessTermination {
             hideWindow()
+        }
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window === currentWindow {
+            presentationState.setWindowVisible(window.isVisible && !window.isMiniaturized && !NSApp.isHidden)
         }
     }
 

@@ -5,6 +5,21 @@ final class MetricsSchedule: @unchecked Sendable {
     private let condition = NSCondition()
     private var deadline: ContinuousClock.Instant
     private var interval: Duration
+    private var showing: UUID?
+
+    var processShowing: UUID? {
+        condition.lock()
+        defer { condition.unlock() }
+        return showing
+    }
+
+    func setProcessesVisible(_ visible: Bool) {
+        condition.lock()
+        defer { condition.unlock() }
+        if visible != (showing != nil) {
+            showing = visible ? UUID() : nil
+        }
+    }
 
     var nextSample: ContinuousClock.Instant {
         condition.lock()
