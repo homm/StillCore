@@ -2,6 +2,63 @@ import SwiftUI
 import Darwin
 import Combine
 
+private final class ProcessMenuItem: NSMenuItem {
+    private let handler: () -> Void
+
+    init(_ title: String, handler: @escaping () -> Void) {
+        self.handler = handler
+        super.init(title: title, action: #selector(performAction), keyEquivalent: "")
+        target = self
+    }
+
+    required init(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    @objc private func performAction() { handler() }
+}
+
+private struct ProcessMenuButton: NSViewRepresentable {
+    let label: String
+    let makeMenu: () -> NSMenu
+    var select: (() -> Void)? = nil
+
+    final class RowButton: NSButton {
+        var makeMenu: (() -> NSMenu)?
+        var select: (() -> Void)?
+
+        override func menu(for event: NSEvent) -> NSMenu? { makeMenu?() }
+
+        @objc func activate() {
+            if let select {
+                select()
+            } else {
+                makeMenu?().popUp(positioning: nil, at: NSPoint(x: bounds.minX, y: bounds.maxY), in: self)
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> RowButton {
+        let button = RowButton()
+        button.title = ""
+        button.isBordered = false
+        if select == nil {
+            button.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: nil)
+        }
+        button.target = button
+        button.action = #selector(RowButton.activate)
+        return button
+    }
+
+    func updateNSView(_ button: RowButton, context: Context) {
+        button.makeMenu = makeMenu
+        button.select = select
+        button.setAccessibilityLabel(label)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: RowButton, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions(by: CGSize(width: 20, height: 22))
+    }
+}
+
 struct ProcessList: View {
     @ObservedObject var presentationState: MenuPresentationState
     let processPublisher: AnyPublisher<[ProcessReading], Never>
@@ -34,6 +91,7 @@ struct ProcessList: View {
     @State private var readings: [ProcessReading] = []
     @State private var sortColumn = Column.power
     @State private var selectedProcessID: ProcessReading.ID?
+    @State private var hoveredProcessID: ProcessReading.ID?
     @State private var errorMessage: String?
 
     private var sortedReadings: [ProcessReading] {
@@ -62,6 +120,7 @@ struct ProcessList: View {
         .onChange(of: isExpanded) { _, expanded in
             if !expanded {
                 selectedProcessID = nil
+                hoveredProcessID = nil
             }
             AppDependencies.shared.setProcessesVisible(expanded && presentationState.isWindowVisible)
             readings = []
@@ -147,15 +206,24 @@ struct ProcessList: View {
 
     private func processRow(_ process: ProcessReading, shaded: Bool, cpuWidth: CGFloat) -> some View {
         let selected = selectedProcessID == process.id
-        return Button {
-            selectedProcessID = process.id
-        } label: {
+        return ZStack {
+            ProcessMenuButton(label: process.name, makeMenu: { processMenu(for: process) }) {
+                selectedProcessID = process.id
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityAddTraits(selected ? [.isSelected] : [])
+
             HStack(spacing: 4) {
                 Text(process.name)
                     .foregroundStyle(process.isBackground ? Color(nsColor: .secondaryLabelColor) : selected ? Color(nsColor: .selectedTextColor) : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .allowsHitTesting(false)
+                if selected || hoveredProcessID == process.id {
+                    ProcessMenuButton(label: "Actions for \(process.name)", makeMenu: { processMenu(for: process) })
+                        .frame(width: 20, height: 22)
+                }
                 ForEach(Column.allCases, id: \.self) { column in
                     let metric = formatted(process, column: column, selected: selected)
                     metric.text
@@ -166,6 +234,7 @@ struct ProcessList: View {
                                 ? Color(nsColor: .tertiaryLabelColor)
                                 : .primary
                         )
+                        .allowsHitTesting(false)
                         .lineLimit(1)
                         .frame(width: column == .cpu ? cpuWidth : column.width, alignment: .trailing)
                 }
@@ -173,23 +242,49 @@ struct ProcessList: View {
             .font(.subheadline)
             .padding(.horizontal, 6)
             .frame(height: 22)
-            .background {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(selected ? Color(nsColor: .selectedTextBackgroundColor).opacity(0.60) : Color.primary.opacity(shaded ? 0.035 : 0))
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .frame(height: 22)
+        .background {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(selected ? Color(nsColor: .selectedTextBackgroundColor).opacity(0.60) : Color.primary.opacity(shaded ? 0.035 : 0))
+        }
+        .onHover { hovering in
+            if hovering {
+                hoveredProcessID = process.id
+            } else if hoveredProcessID == process.id {
+                hoveredProcessID = nil
+            }
+        }
         .help("\(process.name) (PID \(process.id.pid))")
-        .contextMenu {
-            Button("Terminate…") {
-                confirmTermination(of: process, force: false)
-            }
-            Button("Force Kill…", role: .destructive) {
-                confirmTermination(of: process, force: true)
+    }
+
+    private func processMenu(for process: ProcessReading) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(NSMenuItem.sectionHeader(title: "\(process.name) (PID \(process.id.pid))"))
+        let policy = process.externalBackgroundPolicy
+        let background = ProcessMenuItem("Background task policy") {
+            if let policy {
+                do {
+                    try process.setBackgroundPolicy(!policy)
+                } catch {
+                    errorMessage = "Could not change background policy for \(process.name): \(error.localizedDescription)"
+                }
             }
         }
+        background.isEnabled = policy != nil
+        background.state = policy == true ? .on : .off
+        menu.addItem(background)
+        menu.addItem(.separator())
+        menu.addItem(ProcessMenuItem("Terminate…") {
+            confirmTermination(of: process, force: false)
+        })
+        let forceKill = ProcessMenuItem("Force Kill…") {
+            confirmTermination(of: process, force: true)
+        }
+        forceKill.attributedTitle = NSAttributedString(string: forceKill.title, attributes: [.foregroundColor: NSColor.systemRed])
+        menu.addItem(forceKill)
+        return menu
     }
 
     private func confirmTermination(of process: ProcessReading, force: Bool) {

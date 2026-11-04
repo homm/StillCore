@@ -15,10 +15,40 @@ struct ProcessReading: Identifiable, Sendable {
     let memory: UInt64
     let power: Double?
 
-    func send(signal: Int32) throws {
+    private func checkIdentity() throws {
         if id.pid <= 0 || ProcessSampler.usage(id.pid)?.ri_proc_start_abstime != id.start {
             throw POSIXError(.ESRCH)
         }
+    }
+
+    var externalBackgroundPolicy: Bool? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout.size(ofValue: info))
+        if proc_pidinfo(id.pid, PROC_PIDTBSDINFO, 0, &info, size) == size {
+            return info.pbi_flags & UInt32(PROC_FLAG_EXT_DARWINBG) != 0
+        }
+        return nil
+    }
+
+    func setBackgroundPolicy(_ enabled: Bool) throws {
+        let command = Process()
+        command.executableURL = URL(fileURLWithPath: "/usr/sbin/taskpolicy")
+        command.arguments = [enabled ? "-b" : "-B", "-p", String(id.pid)]
+        let errors = Pipe()
+        command.standardError = errors
+        try checkIdentity()
+        try command.run()
+        let output = errors.fileHandleForReading.readDataToEndOfFile()
+        command.waitUntilExit()
+        if command.terminationStatus != 0 {
+            let message = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "taskpolicy", code: Int(command.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: message])
+        }
+    }
+
+    func send(signal: Int32) throws {
+        try checkIdentity()
         if kill(id.pid, signal) != 0 {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
         }
