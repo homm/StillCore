@@ -98,9 +98,10 @@ struct ProcessList: View {
     @State private var errorMessage: String?
 
     private var sortedReadings: [ProcessReading] {
-        readings.sorted { lhs, rhs in
-            let left = value(lhs, column: sortColumn)
-            let right = value(rhs, column: sortColumn)
+        let column = sortColumn
+        return readings.sorted { lhs, rhs in
+            let left = value(lhs, column: column)
+            let right = value(rhs, column: column)
             if left != right {
                 if let left, let right {
                     return left > right
