@@ -630,11 +630,18 @@ struct ContentView: View {
                                 selection: chartSelection,
                                 settingsInvalidationKey: AnyHashable(dependencies.frequencyUsageByCores),
                                 settingsView: AnyView(
-                                    Toggle(
-                                        "CPU usage by cores",
-                                        isOn: $dependencies.frequencyUsageByCores
-                                    )
-                                        .padding(12)
+                                    Toggle(isOn: $dependencies.frequencyUsageByCores) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("CPU usage by cores")
+                                            Text(dependencies.frequencyUsageByCores
+                                                ? "Each fully used core counts as 100%"
+                                                : "A fully used group counts as 100%")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .frame(width: 260, alignment: .leading)
+                                    .padding(12)
                                 )
                             )
                                 .frame(height: max(0, chartHeight) * 0.35)
