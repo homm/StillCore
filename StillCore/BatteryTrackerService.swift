@@ -134,57 +134,10 @@ final class BatteryTrackerService: HelperService {
         if let runtimeError, errorMessage != runtimeError { errorMessage = runtimeError }
     }
 
-    var statusText: String {
-        guard let runtimeState else { return "Helper not running" }
-
-        if
-            status == .running,
-            let session = runtimeState.batteryTrackerState?.session,
-            let activeSeconds = runtimeState.activeSeconds,
-            let usedPercent = runtimeState.usedPercent
-        {
-            let activeDuration = formatDuration(activeSeconds)
-            let sleepSuffix: String
-            if session.sleepSeconds > 0 {
-                sleepSuffix = " + \(formatDuration(session.sleepSeconds)) sleep"
-            } else {
-                sleepSuffix = ""
-            }
-            return "Drained \(Int(usedPercent.rounded()))% over \(activeDuration)\(sleepSuffix)"
-        }
-
-        return chargeStatusText(runtimeState.chargeStatus)
-    }
-
     func openBatterySettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") else {
             return
         }
         NSWorkspace.shared.open(url)
     }
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let clamped = max(0, seconds)
-        let hours = clamped / 3600
-        let minutes = (clamped % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        return "\(minutes)m"
-    }
-
-    private func chargeStatusText(_ status: BatteryChargeStatus) -> String {
-        switch status {
-        case .charging:
-            return "Charging"
-        case .onHold:
-            return "On Hold"
-        case .charged:
-            return "Charged"
-        case .discharging:
-            return ""
-        }
-    }
-
 }

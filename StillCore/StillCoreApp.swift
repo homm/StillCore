@@ -501,6 +501,7 @@ struct ContentView: View {
     @ObservedObject var presentationState: MenuPresentationState
     @State private var chartSelection = ChartSelection()
     @State private var isBatteryTrackerPopoverPresented = false
+    @State private var isBatteryUsagePresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
     var body: some View {
@@ -670,8 +671,7 @@ struct ContentView: View {
                             .padding(.vertical, -4)
                     }
 
-                    Text(batteryTrackerService.statusText)
-                        .textSelection(.enabled)
+                    batteryStatusLabel
                         .foregroundStyle(.secondary)
 
                     if batteryTrackerService.status != .running {
@@ -688,8 +688,9 @@ struct ContentView: View {
                             BatteryTrackerPopover(service: batteryTrackerService)
                         }
                     }
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
+                .frame(height: BatteryIndicatorImage.size.height)
             }
         }
         .padding(12)
@@ -740,6 +741,65 @@ struct ContentView: View {
             .frame(width: 340, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    @ViewBuilder
+    private var batteryStatusLabel: some View {
+        if let state = batteryTrackerService.runtimeState {
+            if batteryTrackerService.status == .running,
+               let session = state.batteryTrackerState?.session,
+               let activeSeconds = state.activeSeconds,
+               let usedPercent = state.usedPercent {
+                let percent = Int(usedPercent.rounded())
+                let activeTime = formatDuration(activeSeconds)
+                Button("Drained \(percent)% over \(activeTime)") {
+                    isBatteryUsagePresented.toggle()
+                }
+                .buttonStyle(AccessoryLikeButtonStyle())
+                .fixedSize()
+                .popover(isPresented: $isBatteryUsagePresented, arrowEdge: .bottom) {
+                    let battery = state.batteryStatus
+                    let charge: (String, String)? = switch (battery.remainingCapacity, battery.fullChargeCapacity) {
+                    case let (remaining?, full?): ("Remaining charge", "\(remaining.formatted()) / \(full.formatted()) mAh")
+                    case let (remaining?, nil): ("Remaining charge", "\(remaining.formatted()) mAh")
+                    case let (nil, full?): ("Full charge capacity", "\(full.formatted()) mAh")
+                    case (nil, nil): nil
+                    }
+                    let startingCharge = session.startCapacityMah
+                    let startingChargeUnit = battery.maxCapacityMah == 100 ? "%" : " mAh"
+                    BatteryDrainSummary(
+                        percent: percent,
+                        groups: [
+                            [("Active time", activeTime), ("Sleep time", formatDuration(session.sleepSeconds))],
+                            [charge, ("Initial charge", "\(startingCharge.formatted())\(startingChargeUnit)")].compactMap { $0 }
+                        ]
+                    )
+                        .fixedSize()
+                        .padding(12)
+                }
+                .padding(.leading, -3)
+            } else {
+                switch state.chargeStatus {
+                case .charging: Text("Charging")
+                case .onHold: Text("On Hold")
+                case .charged: Text("Charged")
+                case .discharging: Text("")
+                }
+            }
+        } else {
+            Text("Helper not running")
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        let clamped = max(0, seconds)
+        let hours = clamped / 3600
+        let minutes = (clamped % 3600) / 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
     }
 
     private var intervalLabel: AttributedString {

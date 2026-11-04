@@ -13,6 +13,8 @@ enum BatteryStatusError: LocalizedError {
 }
 
 struct BatteryStatus {
+    var remainingCapacity: Int?
+    var fullChargeCapacity: Int?
     var currentCapacityMah: Int
     var maxCapacityMah: Int
     var isOnACPower: Bool
@@ -49,7 +51,12 @@ struct BatteryStatus {
             throw BatteryStatusError.unavailable
         }
 
+        let batteryData = IORegistryEntryCreateCFProperty(
+            entry, "BatteryData" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? [String: Any]
         return BatteryStatus(
+            remainingCapacity: batteryData?["RemainingCapacity"] as? Int,
+            fullChargeCapacity: batteryData?["FullChargeCapacity"] as? Int,
             currentCapacityMah: currentCapacity,
             maxCapacityMah: maxCapacity,
             isOnACPower: isOnACPower,
