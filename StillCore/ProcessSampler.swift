@@ -8,12 +8,26 @@ struct ProcessReading: Identifiable, Sendable {
     }
 
     let id: ID
-    let name: String
     let isBackground: Bool
     let cpu: Double?
     let gpu: Double?
     let memory: UInt64
     let power: Double?
+
+    func displayName(using path: inout [CChar]) -> String {
+        let length = proc_pidpath(id.pid, &path, UInt32(path.count))
+        if length > 0 {
+            return path.withUnsafeBytes { buffer in
+                let bytes = buffer.prefix(Int(length)).prefix { $0 != 0 }
+                let start = bytes.lastIndex(of: 0x2F).map { $0 + 1 } ?? bytes.startIndex
+                return String(decoding: bytes[start...], as: UTF8.self)
+            }
+        }
+        let nameLength = proc_name(id.pid, &path, UInt32(path.count))
+        return nameLength > 0 ? path.withUnsafeBytes {
+            String(decoding: $0.prefix(Int(nameLength)).prefix { $0 != 0 }, as: UTF8.self)
+        } : String(id.pid)
+    }
 
     private func checkIdentity() throws {
         if id.pid <= 0 || ProcessSampler.usage(id.pid)?.ri_proc_start_abstime != id.start {
@@ -114,17 +128,6 @@ final class ProcessSampler {
                 let cpu = usage.ri_user_time + usage.ri_system_time
                 let gpu = gpuTimes[pid]
                 let energy = usage.ri_energy_nj
-                let processName: String
-                var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-                let pathLength = proc_pidpath(pid, &path, UInt32(path.count))
-                if pathLength > 0 {
-                    let executablePath = String(decoding: path.prefix(Int(pathLength)).prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
-                    processName = URL(fileURLWithPath: executablePath).lastPathComponent
-                } else {
-                    var name = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-                    let length = proc_name(pid, &name, UInt32(name.count))
-                    processName = length > 0 ? String(decoding: name.prefix(Int(length)).prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) : String(pid)
-                }
                 let old = previous[id]
                 let qos = QoSActivity(usage: usage, previous: old?.qos)
                 func rate(_ value: UInt64, _ baseline: UInt64?, _ factor: Double) -> Double? {
@@ -135,7 +138,6 @@ final class ProcessSampler {
                 }
                 rows.append(ProcessReading(
                     id: id,
-                    name: processName,
                     isBackground: qos.isBackground,
                     cpu: rate(cpu, old?.cpu, 100),
                     gpu: gpu.flatMap { rate($0, old?.gpu, 100 / nsPerTick) }.map { min($0, 100) },
