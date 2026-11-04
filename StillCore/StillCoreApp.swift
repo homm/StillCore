@@ -518,6 +518,7 @@ struct ContentView: View {
     @ObservedObject private var batteryTrackerService = BatteryTrackerService.shared
     @ObservedObject var presentationState: MenuPresentationState
     @State private var chartSelection = ChartSelection()
+    @State private var showsProcesses = false
     @State private var isBatteryTrackerPopoverPresented = false
     @State private var batteryEnergyModeMenuController = BatteryEnergyModeMenuController()
 
@@ -656,68 +657,38 @@ struct ContentView: View {
                     }
                     ProcessList(
                         presentationState: presentationState,
-                        processPublisher: dependencies.processPublisher
+                        processPublisher: dependencies.processPublisher,
+                        isExpanded: showsProcesses
                     )
-                        .background(backgroundColor)
-                        .padding(chartSectionInsets)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                            presentationState.onMinimumContentHeightChange?(AppPresentation.windowMinSize.height + height)
-                        }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        presentationState.onMinimumContentHeightChange?(AppPresentation.windowMinSize.height + height)
+                    }
                 }
             }
 
-            if BatteryTrackerService.isBatteryAvailable {
+            if BatteryTrackerService.isBatteryAvailable || dependencies.metricsError.isEmpty {
                 HStack(spacing: 8) {
-                    if let batteryState = batteryTrackerService.runtimeState {
-                        Button {
-                            batteryEnergyModeMenuController.showMenu()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(nsImage: BatteryIndicatorImage.make(
-                                    state: batteryState,
-                                    usesSecondaryMask: false
-                                ))
-                                    .padding(.vertical, -1)
-                                    .foregroundStyle(.secondary)
-                                Text("\(batteryState.displayedPercent)%")
-                                    .foregroundStyle(.secondary)
-                                    .font(Font(AppFonts.batteryPercent))
-                            }
-                        }
-                            .buttonStyle(AccessoryLikeButtonStyle())
-                            .background {
-                                BatteryEnergyModeMenuAnchor(
-                                    controller: batteryEnergyModeMenuController,
-                                    batteryState: batteryState,
-                                    openBatterySettings: {
-                                        batteryTrackerService.openBatterySettings()
-                                    }
-                                )
-                            }
-                            .help("Energy mode")
-                            .padding(.leading, -7)
-                            .padding(.trailing, -5)
-                            .padding(.vertical, -4)
-                    }
-
-                    BatteryStatusLabel(state: batteryTrackerService.runtimeState, trackerRunning: batteryTrackerService.status == .running)
-                        .foregroundStyle(.secondary)
-
-                    if batteryTrackerService.status != .running {
-                        Button {
-                            isBatteryTrackerPopoverPresented.toggle()
-                        } label: {
-                            Image(systemName: "exclamationmark.circle")
-                                .font(AppFonts.helpIcon)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Battery tracker")
-                        .popover(isPresented: $isBatteryTrackerPopoverPresented, arrowEdge: .bottom) {
-                            BatteryTrackerPopover(service: batteryTrackerService)
-                        }
+                    if BatteryTrackerService.isBatteryAvailable {
+                        batteryControls
                     }
                     Spacer(minLength: 0)
+                    if dependencies.metricsError.isEmpty {
+                        Button {
+                            showsProcesses.toggle()
+                        } label: {
+                            HStack(spacing: 0) {
+                                Text("Top processes")
+                                Image(systemName: showsProcesses ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .offset(y: 1)
+                                    .padding(.leading, 2)
+                            }
+                            .fixedSize()
+                        }
+                        .buttonStyle(AccessoryLikeButtonStyle(isSelected: showsProcesses))
+                        .accessibilityLabel("Top processes")
+                        .accessibilityValue(showsProcesses ? "Expanded" : "Collapsed")
+                    }
                 }
                 .frame(height: BatteryIndicatorImage.size.height)
             }
@@ -729,6 +700,59 @@ struct ContentView: View {
                 Color(.textBackgroundColor)
                     .frame(height: 12)
                     .allowsHitTesting(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var batteryControls: some View {
+        if let batteryState = batteryTrackerService.runtimeState {
+            Button {
+                batteryEnergyModeMenuController.showMenu()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(nsImage: BatteryIndicatorImage.make(
+                        state: batteryState,
+                        usesSecondaryMask: false
+                    ))
+                        .padding(.vertical, -1)
+                        .foregroundStyle(.secondary)
+                    Text("\(batteryState.displayedPercent)%")
+                        .foregroundStyle(.secondary)
+                        .font(Font(AppFonts.batteryPercent))
+                }
+            }
+                .buttonStyle(AccessoryLikeButtonStyle())
+                .background {
+                    BatteryEnergyModeMenuAnchor(
+                        controller: batteryEnergyModeMenuController,
+                        batteryState: batteryState,
+                        openBatterySettings: {
+                            batteryTrackerService.openBatterySettings()
+                        }
+                    )
+                }
+                .help("Energy mode")
+                .padding(.leading, -7)
+                .padding(.trailing, -5)
+                .padding(.vertical, -4)
+        }
+
+        BatteryStatusLabel(state: batteryTrackerService.runtimeState, trackerRunning: batteryTrackerService.status == .running)
+            .foregroundStyle(.secondary)
+
+        if batteryTrackerService.status != .running {
+            Button {
+                isBatteryTrackerPopoverPresented.toggle()
+            } label: {
+                Image(systemName: "exclamationmark.circle")
+                    .font(AppFonts.helpIcon)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Battery tracker")
+            .popover(isPresented: $isBatteryTrackerPopoverPresented, arrowEdge: .bottom) {
+                BatteryTrackerPopover(service: batteryTrackerService)
             }
         }
     }

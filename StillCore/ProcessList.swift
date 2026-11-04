@@ -5,6 +5,7 @@ import Combine
 struct ProcessList: View {
     @ObservedObject var presentationState: MenuPresentationState
     let processPublisher: AnyPublisher<[ProcessReading], Never>
+    let isExpanded: Bool
 
     private enum Column: String, CaseIterable {
         case cpu = "CPU"
@@ -30,7 +31,6 @@ struct ProcessList: View {
         }
     }
 
-    @State private var isExpanded = false
     @State private var readings: [ProcessReading] = []
     @State private var sortColumn = Column.power
     @State private var selectedProcessID: ProcessReading.ID?
@@ -55,8 +55,7 @@ struct ProcessList: View {
             if isExpanded {
                 processTable
                     .padding(.horizontal, -6)
-            } else {
-                disclosureButton
+                    .padding(.top, 8)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -83,27 +82,6 @@ struct ProcessList: View {
         }
     }
 
-    private var disclosureButton: some View {
-        Button {
-            isExpanded.toggle()
-        } label: {
-            HStack(spacing: 3) {
-                Text("Top processes")
-                    .font(.headline)
-                    .foregroundStyle(Color.primary)
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .font(Font(AppFonts.chartLegend))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 22)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-    }
-
     private var processTable: some View {
         var topReadings = Array(sortedReadings.prefix(7))
         if let selectedProcess = readings.first(where: { $0.id == selectedProcessID }),
@@ -117,7 +95,8 @@ struct ProcessList: View {
         }
         return VStack(spacing: 0) {
             HStack(spacing: 4) {
-                disclosureButton
+                Text("Process")
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(Column.allCases, id: \.self) { column in
                     Button {
                         sortColumn = column
