@@ -840,6 +840,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem: presentationController.statusItem,
             menu: statusItemMenu
         )
+        if CommandLine.arguments.contains("--floating") {
+            presentationController.showFloatingWindow()
+        }
     }
 
     @objc private func showAboutPanel() {

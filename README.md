@@ -42,12 +42,12 @@ I often work on a laptop and want to understand what is happening with energy us
 
 During development, I paid attention to StillCore's own footprint. The table below shows power usage while running different monitoring apps as `CHIP`: `CPU` + `GPU` in watts. For example, the idle baseline without any background apps is `0.17`: `0.01` + `0.00`.
 
-| App | Mode | 100ms update interval | 1 sec update interval |
-| --- | --- | --- | --- |
-| | | `CHIP`: `CPU` + `GPU` | `CHIP`: `CPU` + `GPU` |
-| **StillCore** | In tray<br>Interactive | `0.21`: `0.03` + `0.00`<br>`0.55`: `0.09` + `0.02` | `0.18`: `0.01` + `0.00`<br>`0.25`: `0.04` + `0.01` |
-| **Activity Monitor** macOS 27.2 | In tray<br>Interactive | -<br>- | `0.3`: `0.1` + `0.00`<br>`0.53`: `0.21` + `0.00` |
-| **MX Power Gadget** 1.6.4[^mx-power-gadget] | In tray<br>Interactive | -<br>- | `1.93`: `1.17` + `0.00`<br>`1.93`: `1.18` + `0.01` |
+| App                                         | Mode                   | 1 sec update interval                              | 100ms update interval                              |
+| ------------------------------------------- | ---------------------- | -------------------------------------------------- | -------------------------------------------------- |
+|                                             |                        | `CHIP`: `CPU` + `GPU`                              | `CHIP`: `CPU` + `GPU`                              |
+| **StillCore**                               | In tray<br>Interactive | `0.18`: `0.01` + `0.00`<br>`0.25`: `0.04` + `0.01` | `0.21`: `0.03` + `0.00`<br>`0.55`: `0.09` + `0.02` |
+| **Activity Monitor** macOS 27.2             | In tray<br>Interactive | `0.3`: `0.1` + `0.00`<br>`0.53`: `0.21` + `0.00`   | -<br>-                                             |
+| **MX Power Gadget** 1.6.4[^mx-power-gadget] | In tray<br>Interactive | `1.93`: `1.17` + `0.00`<br>`1.93`: `1.18` + `0.01` | -<br>-                                             |
 
 [^mx-power-gadget]: MX Power Gadget uses `powermetrics` for its measurements, but according to this [Habr article in Russian](https://habr.com/ru/articles/858736/), it starts a new `powermetrics` process for each sample. Because `powermetrics` has a relatively expensive startup phase, the utility can consume a few watts in practice even when its own charts show near-zero power.
 
@@ -118,9 +118,8 @@ Clone the sibling repositories and build the local `macmon` xcframework:
 cd ..
 git clone https://github.com/homm/macmon.git
 git clone https://github.com/homm/macmon-bindings.git
-cd macmon
-make xcframework
-cd ../StillCore
+cd StillCore
+make -C ../macmon xcframework
 ```
 
 Build and open StillCore against the local metrics core:

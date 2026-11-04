@@ -138,6 +138,8 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
         floatingWindow.delegate = self
         configureWindow?(attachedWindow)
         configureWindow?(floatingWindow)
+        floatingWindow.center()
+        floatingWindow.setFrameAutosaveName("StillCoreFloatingWindow")
         configureStatusItemAction()
 
         presentationState.onModeChange = { [weak self] in
@@ -173,6 +175,18 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
             currentWindow.makeKeyAndOrderFront(nil)
             currentWindow.makeFirstResponder(nil)
         }
+    }
+
+    func showFloatingWindow() {
+        let saved = floatingWindow.frame
+        presentationState.setPresentationMode(.floating)
+        var frame = floatingWindow.frameRect(forContentRect: NSRect(origin: .zero, size: floatingWindow.contentMinSize))
+        frame.origin = NSPoint(x: saved.minX, y: saved.maxY - frame.height)
+        if let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(frame) }) ?? NSScreen.main {
+            frame = floatingWindow.constrainFrameRect(frame, to: screen)
+        }
+        floatingWindow.setFrame(frame, display: false)
+        showWindow()
     }
 
     private func showWindow() {

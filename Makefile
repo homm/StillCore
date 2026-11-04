@@ -31,7 +31,7 @@ help:
 	@printf '%s\n' \
 		'make app            Build $(NAME).app' \
 		'LOCAL=1 make app    Build with local workspace and local macmon xcframework' \
-		'make run            Build and run $(NAME) in this terminal' \
+		'make run [ARGS=...] Build and run $(NAME) in this terminal' \
 		'make open-app       Build and open $(NAME).app' \
 		'make helpers-uninstall Build app and uninstall both helpers' \
 		'make release        Build Release, create $(NAME).dmg, submit for notarization' \
@@ -55,7 +55,7 @@ app:
 
 .PHONY: run
 run: app
-	$(APP_EXEC_PATH)
+	"$(APP_EXEC_PATH)" $(ARGS)
 
 .PHONY: open-app
 open-app: app
