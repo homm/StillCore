@@ -86,7 +86,7 @@ private final class FloatingWindow: NSWindow {
     init() {
         super.init(
             contentRect: .zero,
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -94,6 +94,27 @@ private final class FloatingWindow: NSWindow {
         isReleasedWhenClosed = false
         collectionBehavior = [.moveToActiveSpace, .fullScreenNone]
         tabbingMode = .disallowed
+        titleVisibility = .hidden
+        titlebarAppearsTransparent = true
+        toolbar = NSToolbar(identifier: "FloatingWindowToolbar")
+        toolbarStyle = .unifiedCompact
+        showsToolbarButton = false
+    }
+
+    override func layoutIfNeeded() {
+        super.layoutIfNeeded()
+
+        // Center the window controls on the floating header, 24 points from the top.
+        let centerInWindow = NSPoint(x: 0, y: frame.height - 24)
+        for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            if let button = standardWindowButton(type), let container = button.superview {
+                let centerY = container.convert(centerInWindow, from: nil).y
+                let origin = NSPoint(x: button.frame.minX, y: centerY - button.frame.height / 2)
+                if button.frame.origin != origin {
+                    button.setFrameOrigin(origin)
+                }
+            }
+        }
     }
 }
 
@@ -114,7 +135,7 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
     init(
         @ViewBuilder content: @escaping ContentBuilder,
         statusItemMenu: NSMenu? = nil,
-        configureWindow: ((NSWindow, PresentationMode) -> Void)? = nil
+        configureWindow: ((NSWindow) -> Void)? = nil
     ) {
         hostingView = NSHostingView(rootView: AnyView(content(presentationState)))
         hostingView.sizingOptions = []
@@ -131,8 +152,10 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
 
         attachedWindow.delegate = self
         floatingWindow.delegate = self
-        configureWindow?(attachedWindow, .attached)
-        configureWindow?(floatingWindow, .floating)
+        configureWindow?(attachedWindow)
+        configureWindow?(floatingWindow)
+        floatingWindow.center()
+        floatingWindow.setFrameAutosaveName("StillCoreFloatingWindow")
         configureStatusItemAction()
 
         presentationState.onModeChange = { [weak self] in
@@ -168,6 +191,18 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
             currentWindow.makeKeyAndOrderFront(nil)
             currentWindow.makeFirstResponder(nil)
         }
+    }
+
+    func showFloatingWindow() {
+        let saved = floatingWindow.frame
+        presentationState.setPresentationMode(.floating)
+        var frame = floatingWindow.frameRect(forContentRect: NSRect(origin: .zero, size: floatingWindow.contentMinSize))
+        frame.origin = NSPoint(x: saved.minX, y: saved.maxY - frame.height)
+        if let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(frame) }) ?? NSScreen.main {
+            frame = floatingWindow.constrainFrameRect(frame, to: screen)
+        }
+        floatingWindow.setFrame(frame, display: false)
+        showWindow()
     }
 
     private func showWindow() {

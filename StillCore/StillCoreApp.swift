@@ -194,7 +194,7 @@ final class AppDependencies: ObservableObject {
         var parts = info.cpuTiers.map { tier in
             "\(tier.cores)\(tier.label)"
         }
-        parts.append("\(info.gpuCores)G cores")
+        parts.append("\(info.gpuCores)G")
         return parts.joined(separator: " ")
     }
 
@@ -506,18 +506,23 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                if let chipName = dependencies.chipName, chipName.hasPrefix("Apple ") {
-                    let logo = Text(Image(systemName: "apple.logo"))
-                        .baselineOffset(0.5)
-                    Text("\(logo)\u{2005}\(chipName.dropFirst("Apple ".count))")
-                        .font(.headline)
-                } else {
-                    Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
-                        .font(.headline)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if let chipName = dependencies.chipName, chipName.hasPrefix("Apple ") {
+                        let logo = Text(Image(systemName: "apple.logo"))
+                            .baselineOffset(0.5)
+                        Text("\(logo)\u{2005}\(chipName.dropFirst("Apple ".count))")
+                            .font(.headline)
+                    } else {
+                        Text(dependencies.chipName ?? AppPresentation.floatingWindowTitle)
+                            .font(.headline)
+                    }
+                    if !dependencies.socSummary.isEmpty {
+                        Text(presentationState.mode == .attached ? "\(dependencies.socSummary) cores" : dependencies.socSummary)
+                            .font(presentationState.mode == .floating ? .subheadline : nil)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Text(dependencies.socSummary)
-                    .foregroundStyle(.secondary)
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Menu {
                     Text("Update interval:")
                     ForEach(Self.intervalMenuOptions, id: \.milliseconds) { option in
@@ -569,6 +574,7 @@ struct ContentView: View {
                     Image(systemName: "power")
                 }
             }
+            .padding(.leading, presentationState.mode == .floating ? 80 : 0)
 
             if !dependencies.metricsError.isEmpty {
                 Text("Macmon error: \(dependencies.metricsError)")
@@ -825,16 +831,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ContentView(presentationState: presentationState)
             },
             statusItemMenu: statusItemMenu,
-            configureWindow: { window, presentationMode in
+            configureWindow: { window in
                 window.title = AppPresentation.floatingWindowTitle
                 window.setContentSize(AppPresentation.windowMinSize)
-
-                switch presentationMode {
-                case .attached:
-                    window.contentMinSize = AppPresentation.windowMinSize
-                case .floating:
-                    window.minSize = AppPresentation.windowMinSize
-                }
+                window.contentMinSize = AppPresentation.windowMinSize
             }
         )
 
@@ -843,6 +843,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem: presentationController.statusItem,
             menu: statusItemMenu
         )
+        if CommandLine.arguments.contains("--floating") {
+            presentationController.showFloatingWindow()
+        }
     }
 
     @objc private func showAboutPanel() {
