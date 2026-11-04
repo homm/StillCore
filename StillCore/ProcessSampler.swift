@@ -172,11 +172,13 @@ final class ProcessSampler {
             defer { IOObjectRelease(clients) }
             while case let client = IOIteratorNext(clients), client != 0 {
                 defer { IOObjectRelease(client) }
-                let creator = IORegistryEntryCreateCFProperty(client, "IOUserClientCreator" as CFString, nil, 0)?.takeRetainedValue() as? String
-                if let creator, creator.hasPrefix("pid "),
+                var properties: Unmanaged<CFMutableDictionary>?
+                if IORegistryEntryCreateCFProperties(client, &properties, nil, 0) != KERN_SUCCESS { continue }
+                let clientProperties = properties!.takeRetainedValue() as NSDictionary
+                if let creator = clientProperties["IOUserClientCreator"] as? String, creator.hasPrefix("pid "),
                    let pid = pid_t(creator.dropFirst(4).prefix { $0.isNumber }),
-                   let usage = IORegistryEntryCreateCFProperty(client, "AppUsage" as CFString, nil, 0)?.takeRetainedValue() as? [[String: Any]] {
-                    for entry in usage {
+                   let usage = clientProperties["AppUsage"] as? NSArray {
+                    for case let entry as NSDictionary in usage {
                         if let time = entry["accumulatedGPUTime"] as? UInt64 {
                             times[pid, default: 0] += time
                         }
