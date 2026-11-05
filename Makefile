@@ -116,6 +116,11 @@ test: app
 		StillCore/ProcessSampler.swift Tests/ProcessQoSChecks.swift \
 		-o $(DERIVED_DATA)/ProcessQoSChecks
 	$(DERIVED_DATA)/ProcessQoSChecks
+	xcrun swiftc -swift-version 6 -parse-as-library \
+		-module-cache-path $(DERIVED_DATA)/ModuleCache.noindex \
+		StillCore/ProcessSampler.swift Tests/ProcessFilterChecks.swift \
+		-o $(DERIVED_DATA)/ProcessFilterChecks
+	$(DERIVED_DATA)/ProcessFilterChecks
 
 .PHONY: profile
 PROFILE_TRACE ?= $(DERIVED_DATA)/$(NAME)-Time-Profiler.trace

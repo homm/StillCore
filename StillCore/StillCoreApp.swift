@@ -97,7 +97,7 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsSchedule: MetricsSchedule?
-    private let metricsSubject = PassthroughSubject<(metrics: Metrics, processes: [ProcessReading]?), Never>()
+    private let metricsSubject = PassthroughSubject<(metrics: Metrics, processes: ProcessSnapshot?), Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
     func clearChartHistory() {
@@ -108,7 +108,7 @@ final class AppDependencies: ObservableObject {
         metricsSubject.map(\.metrics).eraseToAnyPublisher()
     }
 
-    var processPublisher: AnyPublisher<[ProcessReading], Never> {
+    var processPublisher: AnyPublisher<ProcessSnapshot, Never> {
         metricsSubject.compactMap(\.processes).eraseToAnyPublisher()
     }
 
@@ -156,7 +156,7 @@ final class AppDependencies: ObservableObject {
         }
     }
 
-    private func publish(_ source: Metrics, processes: [ProcessReading]?) {
+    private func publish(_ source: Metrics, processes: ProcessSnapshot?) {
         var metrics = source
         // Keep CHIP above the stacked components and SYS above CHIP when reported totals disagree.
         metrics.chipPower = max(metrics.chipPower, metrics.cpuPower + metrics.anePower + metrics.gpuPower)
