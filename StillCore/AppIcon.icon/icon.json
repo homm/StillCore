@@ -8,7 +8,7 @@
         {
           "glass" : true,
           "hidden" : false,
-          "image-name" : "icon.png",
+          "image-name" : "icon.svg",
           "name" : "icon"
         }
       ],

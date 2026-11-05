@@ -4,6 +4,8 @@ WORKSPACE ?=
 CONFIGURATION ?= $(if $(filter Release,$(MAKECMDGOALS)),Release,Debug)
 DESTINATION ?= platform=macOS,arch=arm64
 DERIVED_DATA := .build
+SCAR := scripts/external/bin/scar
+SCAR_REVISION := 5b77611275909a2a05a6b57511d843485f4311e7
 XCODEBUILD_FLAGS := \
 	-quiet -hideShellScriptEnvironment \
 	ENABLE_CODE_COVERAGE=NO
@@ -43,6 +45,7 @@ help:
 		'make benchmarks     Run charts benchmarks' \
 		'make test           Build app and run automated checks without root' \
 		'make install-hooks  Use repo-managed git hooks' \
+		'make assets         Compile and compact CAR and ICNS resources' \
 		'make clean          Remove .build'
 
 
@@ -78,6 +81,14 @@ benchmarks:
 .PHONY: install-hooks
 install-hooks:
 	git config core.hooksPath .githooks
+
+$(SCAR):
+	cargo install --git https://github.com/theacrat/scar.git \
+		--rev $(SCAR_REVISION) --locked --root scripts/external scar
+
+.PHONY: assets
+assets: $(SCAR)
+	bash scripts/build-assets.sh
 
 .PHONY: test
 test: app

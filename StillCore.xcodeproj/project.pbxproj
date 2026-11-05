@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF4A00012F00000100000001 /* Assets.car in Resources */ = {isa = PBXBuildFile; fileRef = AF4A00022F00000100000001 /* Assets.car */; };
+		AF4A00032F00000100000001 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = AF4A00042F00000100000001 /* AppIcon.icns */; };
 		AF2B00012F00000100000001 /* BatteryTrackerHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = AF2B00022F00000100000001 /* BatteryTrackerHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		AF2B000A2F00000100000001 /* com.github.homm.StillCore.BatteryTracker.plist in Copy LaunchAgent */ = {isa = PBXBuildFile; fileRef = AF2B00092F00000100000001 /* com.github.homm.StillCore.BatteryTracker.plist */; };
 		B0A000012E5A000100000001 /* MacmonSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B0A000032E5A000100000001 /* MacmonSwift */; };
@@ -58,12 +60,25 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AF4A00022F00000100000001 /* Assets.car */ = {isa = PBXFileReference; explicitFileType = file; path = assets/Assets.car; sourceTree = SOURCE_ROOT; };
+		AF4A00042F00000100000001 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = assets/AppIcon.icns; sourceTree = SOURCE_ROOT; };
 		AF9513E52E59D8B900550A10 /* StillCore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StillCore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF2B00022F00000100000001 /* BatteryTrackerHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BatteryTrackerHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF2B00092F00000100000001 /* com.github.homm.StillCore.BatteryTracker.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = BatteryTrackerLaunchAgent/com.github.homm.StillCore.BatteryTracker.plist; sourceTree = "<group>"; };
 		AF3C00022F00000100000001 /* PowerMetricsHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PowerMetricsHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF3C00092F00000100000001 /* PowerMetrics daemon plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PowerMetricsLaunchDaemon/com.github.homm.StillCore.PowerMetrics.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AF4A00052F00000100000001 /* Asset sources */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppIcon.icon,
+				Assets.xcassets,
+			);
+			target = AF9513E42E59D8B900550A10 /* StillCore */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AF2B00032F00000100000001 /* BatteryTrackerHelper */ = {
@@ -78,6 +93,9 @@
 		};
 		AF9513E72E59D8B900550A10 /* StillCore */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AF4A00052F00000100000001 /* Asset sources */,
+			);
 			path = StillCore;
 			sourceTree = "<group>";
 		};
@@ -110,6 +128,8 @@
 		AF9513DC2E59D8B900550A10 = {
 			isa = PBXGroup;
 			children = (
+				AF4A00022F00000100000001 /* Assets.car */,
+				AF4A00042F00000100000001 /* AppIcon.icns */,
 				AF9513E72E59D8B900550A10 /* StillCore */,
 				AF2B00042F00000100000001 /* BatteryTrackingShared */,
 				AF2B00032F00000100000001 /* BatteryTrackerHelper */,
@@ -258,6 +278,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF4A00012F00000100000001 /* Assets.car in Resources */,
+				AF4A00032F00000100000001 /* AppIcon.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,7 +434,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = StillCore/StillCore.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202611050241;
+				CURRENT_PROJECT_VERSION = 202611051043;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -452,7 +474,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = StillCore/StillCore.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202611050241;
+				CURRENT_PROJECT_VERSION = 202611051043;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -488,7 +510,7 @@
 			buildSettings = {
 				ARCHS = arm64;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202611050241;
+				CURRENT_PROJECT_VERSION = 202611051043;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -507,7 +529,7 @@
 				ARCHS = arm64;
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202611050241;
+				CURRENT_PROJECT_VERSION = 202611051043;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -525,7 +547,7 @@
 			buildSettings = {
 				ARCHS = arm64;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202611050241;
+				CURRENT_PROJECT_VERSION = 202611051043;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -544,7 +566,7 @@
 				ARCHS = arm64;
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202611050241;
+				CURRENT_PROJECT_VERSION = 202611051043;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
