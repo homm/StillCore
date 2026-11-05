@@ -45,7 +45,7 @@ During development, I paid attention to StillCore's own footprint. The table bel
 | App                                         | Mode                   | 1 sec update interval                              | 100ms update interval                              |
 | ------------------------------------------- | ---------------------- | -------------------------------------------------- | -------------------------------------------------- |
 |                                             |                        | `CHIP`: `CPU` + `GPU`                              | `CHIP`: `CPU` + `GPU`                              |
-| **StillCore**                               | In tray<br>Interactive | `0.18`: `0.01` + `0.00`<br>`0.25`: `0.04` + `0.01` | `0.21`: `0.03` + `0.00`<br>`0.55`: `0.09` + `0.02` |
+| **StillCore**                               | In tray<br>Interactive | `0.17`: `0.01` + `0.00`<br>`0.21`: `0.02` + `0.00` | `0.19`: `0.02` + `0.00`<br>`0.47`: `0.06` + `0.02` |
 | **Activity Monitor** macOS 27.2             | In tray<br>Interactive | `0.3`: `0.1` + `0.00`<br>`0.53`: `0.21` + `0.00`   | -<br>-                                             |
 | **MX Power Gadget** 1.6.4[^mx-power-gadget] | In tray<br>Interactive | `1.93`: `1.17` + `0.00`<br>`1.93`: `1.18` + `0.01` | -<br>-                                             |
 
