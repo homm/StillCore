@@ -86,29 +86,47 @@ struct ProcessReading: Identifiable, Sendable {
 
 struct ProcessSnapshot: Sendable {
     var readings: [ProcessReading] = []
-    var childrenByPID: [pid_t: [pid_t]] = [:]
-
-    mutating func addProcess(pid: pid_t, parentPID: pid_t, responsiblePID: pid_t) {
-        let parent = responsiblePID > 0 && responsiblePID != pid ? responsiblePID : parentPID
-        childrenByPID[parent, default: []].append(pid)
-    }
-
-    func processIDs(root: pid_t, applicationPIDs: Set<pid_t>) -> Set<pid_t> {
+    func processIDs(root: pid_t, applicationPIDs: Set<pid_t>,
+                    responsiblePID: (pid_t) -> pid_t = { ProcessSampler.responsiblePID?($0) ?? -1 },
+                    parentPID: (pid_t) -> pid_t? = ProcessSampler.parentPID) -> Set<pid_t> {
         var result: Set<pid_t> = [root]
-        var pending = [root]
-        while let parent = pending.popLast() {
-            for child in childrenByPID[parent, default: []] {
-                if !applicationPIDs.contains(child), result.insert(child).inserted {
-                    pending.append(child)
+        var membership: [pid_t: Bool] = [root: true]
+        for pid in applicationPIDs where pid != root {
+            membership[pid] = false
+        }
+        var path: [pid_t] = []
+        for reading in readings {
+            path.removeAll(keepingCapacity: true)
+            var pid = reading.id.pid
+            var matches = false
+            while true {
+                if let known = membership[pid] {
+                    matches = known
+                    break
+                }
+                // Mark the path before following links so cycles resolve to false.
+                membership[pid] = false
+                path.append(pid)
+                let responsible = responsiblePID(pid)
+                if responsible > 0 && responsible != pid {
+                    pid = responsible
+                } else if let parent = parentPID(pid) {
+                    pid = parent
+                } else {
+                    break
                 }
             }
+            for pid in path {
+                membership[pid] = matches
+            }
+            if matches { result.insert(reading.id.pid) }
         }
         return result
     }
 }
 
 final class ProcessSampler {
-    private static let responsiblePID: (@convention(c) (pid_t) -> pid_t)? = {
+    fileprivate static let responsiblePID: (@convention(c) (pid_t) -> pid_t)? = {
         if let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") {
             return unsafeBitCast(symbol, to: (@convention(c) (pid_t) -> pid_t).self)
         }
@@ -157,28 +175,31 @@ final class ProcessSampler {
         }
     }
 
+    static func parentPID(_ pid: pid_t) -> pid_t? {
+        var info = proc_bsdshortinfo()
+        let size = Int32(MemoryLayout.size(ofValue: info))
+        if proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size {
+            return pid_t(info.pbsi_ppid)
+        }
+        return nil
+    }
+
     func sample() -> ProcessSnapshot {
         let now = mach_absolute_time()
         let ticks = Double(now - lastTime)
         lastTime = now
         let uid = geteuid()
         var snapshot = ProcessSnapshot()
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL]
-        var bytes = 0
-        if sysctl(&mib, UInt32(mib.count), nil, &bytes, nil, 0) != 0 { return snapshot }
-        let processSize = MemoryLayout<kinfo_proc>.stride
-        var processes = [kinfo_proc](repeating: kinfo_proc(), count: bytes / processSize + 64)
-        bytes = processes.count * processSize
-        if sysctl(&mib, UInt32(mib.count), &processes, &bytes, nil, 0) != 0 { return snapshot }
+        let filter = UInt32(uid == 0 ? PROC_ALL_PIDS : PROC_UID_ONLY)
+        let pidSize = MemoryLayout<pid_t>.stride
+        let capacity = Int(max(0, proc_listpids(filter, uid, nil, 0))) / pidSize + 64
+        var pids = [pid_t](repeating: 0, count: capacity)
+        let bytes = proc_listpids(filter, uid, &pids, Int32(capacity * pidSize))
+        let pidCount = Int(max(bytes, 0)) / pidSize
         let gpuTimes = Self.gpuTimes()
-        snapshot.readings.reserveCapacity(bytes / processSize)
+        snapshot.readings.reserveCapacity(pidCount)
         var usage = rusage_info_v6()
-        for process in processes.prefix(bytes / processSize) {
-            let pid = process.kp_proc.p_pid
-            if pid <= 0 { continue }
-            snapshot.addProcess(pid: pid, parentPID: process.kp_eproc.e_ppid,
-                                responsiblePID: Self.responsiblePID?(pid) ?? -1)
-            if uid != 0 && process.kp_eproc.e_ucred.cr_uid != uid { continue }
+        for pid in pids.prefix(pidCount) where pid > 0 {
             if Self.readUsage(pid, into: &usage) {
                 let id = ProcessReading.ID(pid: pid, start: usage.ri_proc_start_abstime)
                 let cpu = usage.ri_user_time + usage.ri_system_time
