@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+sh scripts/check-assets.sh
+
 if [ "${SKIP_BUILD_NUMBER_BUMP:-}" = "1" ]; then
     exit 0
 fi
