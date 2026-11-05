@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF4A00082F00000100000001 /* Licenses in Resources */ = {isa = PBXBuildFile; fileRef = AF4A00092F00000100000001 /* Licenses */; };
 		AF4A00012F00000100000001 /* Assets.car in Resources */ = {isa = PBXBuildFile; fileRef = AF4A00022F00000100000001 /* Assets.car */; };
 		AF4A00032F00000100000001 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = AF4A00042F00000100000001 /* AppIcon.icns */; };
 		AF2B00012F00000100000001 /* BatteryTrackerHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = AF2B00022F00000100000001 /* BatteryTrackerHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -60,6 +61,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AF4A00092F00000100000001 /* Licenses */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Licenses; sourceTree = SOURCE_ROOT; };
 		AF4A00022F00000100000001 /* Assets.car */ = {isa = PBXFileReference; explicitFileType = file; path = assets/Assets.car; sourceTree = SOURCE_ROOT; };
 		AF4A00042F00000100000001 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = assets/AppIcon.icns; sourceTree = SOURCE_ROOT; };
 		AF9513E52E59D8B900550A10 /* StillCore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StillCore.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -130,6 +132,7 @@
 			children = (
 				AF4A00022F00000100000001 /* Assets.car */,
 				AF4A00042F00000100000001 /* AppIcon.icns */,
+				AF4A00092F00000100000001 /* Licenses */,
 				AF9513E72E59D8B900550A10 /* StillCore */,
 				AF2B00042F00000100000001 /* BatteryTrackingShared */,
 				AF2B00032F00000100000001 /* BatteryTrackerHelper */,
@@ -280,6 +283,7 @@
 			files = (
 				AF4A00012F00000100000001 /* Assets.car in Resources */,
 				AF4A00032F00000100000001 /* AppIcon.icns in Resources */,
+				AF4A00082F00000100000001 /* Licenses in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

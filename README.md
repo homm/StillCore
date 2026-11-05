@@ -31,9 +31,7 @@ https://github.com/homm/StillCore/releases
 
 ## License
 
-StillCore is released under the MIT License. The metrics core is built on
-[macmon](https://github.com/vladkens/macmon), which is also distributed under
-the MIT License.
+StillCore is released under the MIT License. The metrics core is built on [macmon](https://github.com/vladkens/macmon), sensor tables adapted from [Stats](https://github.com/exelban/stats). StillCore.app bundles the license notices for [macmon](Licenses/macmon.txt), [Stats](Licenses/Stats.txt), [DGCharts](Licenses/DGCharts.txt), and [Sparkle](Licenses/Sparkle.txt).
 
 
 ## Why I Built It
