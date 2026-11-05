@@ -10,22 +10,34 @@ struct ProcessFilterChecks {
     }
 
     static func main() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["30"]
+        try child.run()
+        defer {
+            if child.isRunning {
+                child.terminate()
+                child.waitUntilExit()
+            }
+        }
+        let childPID = child.processIdentifier
         let process = ProcessReading(
-            id: .init(pid: 1234, start: 1), name: "Worker123 Helper",
+            id: .init(pid: childPID, start: 1),
             isBackground: false, cpu: nil, gpu: nil, memory: 0, power: nil
         )
         check(process.matches(name: "", pid: nil), "An empty filter must match every process")
-        check(process.matches(name: "KER123 h", pid: nil), "Names must match substrings without case sensitivity")
+        check(process.matches(name: "LEe", pid: nil), "Names must match substrings without case sensitivity")
         check(!process.matches(name: "Other", pid: nil), "Unrelated names must not match")
-        check(process.matches(name: "1234", pid: 1234), "An exact PID must match")
-        check(!process.matches(name: "123", pid: 123), "Numbers must not match partial PIDs or names")
+        check(process.matches(name: String(childPID), pid: childPID), "An exact PID must match")
+        let partialPID = String(childPID).dropLast()
+        check(!process.matches(name: String(partialPID), pid: pid_t(partialPID)), "Numbers must not match partial PIDs or names")
         let overflowingPID = "999999999999999999999999"
         check(!process.matches(name: overflowingPID, pid: pid_t(overflowingPID) ?? 0), "An overflowing PID must not match")
-        check(process.matches(name: "helper", pid: nil, processIDs: [1234]), "Text and application filters must match together")
-        check(!process.matches(name: "Other", pid: nil, processIDs: [1234]), "Application membership must not bypass text filtering")
-        check(!process.matches(name: "helper", pid: nil, processIDs: [5678]), "Text matches outside the application must be excluded")
-        check(process.matches(name: "1234", pid: 1234, processIDs: [1234]), "An exact PID inside the application must match")
-        check(!process.matches(name: "1234", pid: 1234, processIDs: [5678]), "An exact PID must not bypass the application filter")
+        check(process.matches(name: "sleep", pid: nil, processIDs: [childPID]), "Text and application filters must match together")
+        check(!process.matches(name: "Other", pid: nil, processIDs: [childPID]), "Application membership must not bypass text filtering")
+        check(!process.matches(name: "sleep", pid: nil, processIDs: [0]), "Text matches outside the application must be excluded")
+        check(process.matches(name: String(childPID), pid: childPID, processIDs: [childPID]), "An exact PID inside the application must match")
+        check(!process.matches(name: String(childPID), pid: childPID, processIDs: [0]), "An exact PID must not bypass the application filter")
         check(!process.matches(name: "", pid: nil, processIDs: []), "An empty application tree must match no processes")
 
         var snapshot = ProcessSnapshot()
@@ -44,37 +56,24 @@ struct ProcessFilterChecks {
               "Selecting a nested application must include its own services without ancestors")
         check(snapshot.processIDs(root: 100, applicationPIDs: [100]) == [100, 200, 300, 400, 500, 600, 700, 800],
               "Changing the application list must update filtering using the same process snapshot")
-        let panel = ProcessReading(
-            id: .init(pid: 600, start: 1), name: "Open and Save Panel Service",
-            isBackground: false, cpu: nil, gpu: nil, memory: 0, power: nil
-        )
-        check(panel.matches(name: "open", pid: nil, processIDs: snapshot.processIDs(root: 100, applicationPIDs: [100, 400])),
-              "Text filtering must find an XPC service attributed to the selected application")
-        check(!panel.matches(name: "open", pid: nil, processIDs: snapshot.processIDs(root: 400, applicationPIDs: [100, 400])),
-              "A matching XPC service from another application must be excluded")
-
-        let child = Process()
-        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        child.arguments = ["30"]
-        try child.run()
-        defer {
-            if child.isRunning {
-                child.terminate()
-                child.waitUntilExit()
-            }
-        }
+        snapshot.addProcess(pid: childPID, parentPID: 1, responsiblePID: 100)
+        check(process.matches(name: "sleep", pid: nil, processIDs: snapshot.processIDs(root: 100, applicationPIDs: [100, 400])),
+              "Text filtering must find a process attributed to the selected application through responsibility")
+        check(!process.matches(name: "sleep", pid: nil, processIDs: snapshot.processIDs(root: 400, applicationPIDs: [100, 400])),
+              "A matching process attributed to another application must be excluded")
         let sampler = ProcessSampler()
         let running = sampler.sample()
         check(running.childrenByPID.values.contains { $0.contains(child.processIdentifier) },
               "The snapshot must record a running child process")
         child.terminate()
         child.waitUntilExit()
+        check(!process.matches(name: "sleep", pid: nil), "Name filtering must query the live process instead of retaining its old name")
         check(!sampler.sample().childrenByPID.values.contains { $0.contains(child.processIdentifier) },
               "Refreshing the snapshot must remove exited children")
 
         let sample = ProcessSampler().sample()
         let current = sample.readings.first { $0.id.pid == getpid() }
-        check(current?.name.isEmpty == false, "Sampling must populate the system process name")
+        check(current?.name.isEmpty == false, "A sampled process must provide its system name on demand")
         print("PASS: process filters, parent and responsible links, application boundaries, XPC services and live snapshots")
     }
 }

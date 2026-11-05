@@ -8,12 +8,18 @@ struct ProcessReading: Identifiable, Sendable {
     }
 
     let id: ID
-    let name: String
     let isBackground: Bool
     let cpu: Double?
     let gpu: Double?
     let memory: UInt64
     let power: Double?
+
+    var name: String {
+        withUnsafeTemporaryAllocation(of: CChar.self, capacity: 2 * Int(MAXCOMLEN) + 1) { buffer in
+            let length = proc_name(id.pid, buffer.baseAddress, UInt32(buffer.count))
+            return String(decoding: UnsafeRawBufferPointer(buffer).prefix(Int(max(length, 0))).prefix { $0 != 0 }, as: UTF8.self)
+        }
+    }
 
     func displayName(using path: inout [CChar]) -> String {
         let length = proc_pidpath(id.pid, &path, UInt32(path.count))
@@ -24,6 +30,7 @@ struct ProcessReading: Identifiable, Sendable {
                 return String(decoding: bytes[start...], as: UTF8.self)
             }
         }
+        let name = name
         return name.isEmpty ? String(id.pid) : name
     }
 
@@ -166,7 +173,6 @@ final class ProcessSampler {
         let gpuTimes = Self.gpuTimes()
         snapshot.readings.reserveCapacity(bytes / processSize)
         var usage = rusage_info_v6()
-        var name = [CChar](repeating: 0, count: 2 * Int(MAXCOMLEN) + 1)
         for process in processes.prefix(bytes / processSize) {
             let pid = process.kp_proc.p_pid
             if pid <= 0 { continue }
@@ -174,10 +180,6 @@ final class ProcessSampler {
                                 responsiblePID: Self.responsiblePID?(pid) ?? -1)
             if uid != 0 && process.kp_eproc.e_ucred.cr_uid != uid { continue }
             if Self.readUsage(pid, into: &usage) {
-                let nameLength = proc_name(pid, &name, UInt32(name.count))
-                let processName = name.withUnsafeBytes {
-                    String(decoding: $0.prefix(Int(max(nameLength, 0))).prefix { $0 != 0 }, as: UTF8.self)
-                }
                 let id = ProcessReading.ID(pid: pid, start: usage.ri_proc_start_abstime)
                 let cpu = usage.ri_user_time + usage.ri_system_time
                 let gpu = gpuTimes[pid]
@@ -192,7 +194,6 @@ final class ProcessSampler {
                 }
                 snapshot.readings.append(ProcessReading(
                     id: id,
-                    name: processName,
                     isBackground: qos.isBackground,
                     cpu: rate(cpu, old?.cpu, 100),
                     gpu: gpu.flatMap { rate($0, old?.gpu, 100 / nsPerTick) }.map { min($0, 100) },
