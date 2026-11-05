@@ -14,6 +14,13 @@ struct ProcessReading: Identifiable, Sendable {
     let memory: UInt64
     let power: Double?
 
+    var name: String {
+        withUnsafeTemporaryAllocation(of: CChar.self, capacity: 2 * Int(MAXCOMLEN) + 1) { buffer in
+            let length = proc_name(id.pid, buffer.baseAddress, UInt32(buffer.count))
+            return String(decoding: UnsafeRawBufferPointer(buffer).prefix(Int(max(length, 0))).prefix { $0 != 0 }, as: UTF8.self)
+        }
+    }
+
     func displayName(using path: inout [CChar]) -> String {
         let length = proc_pidpath(id.pid, &path, UInt32(path.count))
         if length > 0 {
@@ -23,10 +30,17 @@ struct ProcessReading: Identifiable, Sendable {
                 return String(decoding: bytes[start...], as: UTF8.self)
             }
         }
-        let nameLength = proc_name(id.pid, &path, UInt32(path.count))
-        return nameLength > 0 ? path.withUnsafeBytes {
-            String(decoding: $0.prefix(Int(nameLength)).prefix { $0 != 0 }, as: UTF8.self)
-        } : String(id.pid)
+        let name = name
+        return name.isEmpty ? String(id.pid) : name
+    }
+
+    func matches(name: String, pid: pid_t?, processIDs: Set<pid_t>? = nil) -> Bool {
+        if let processIDs, !processIDs.contains(id.pid) { return false }
+        if name.isEmpty { return true }
+        if let pid {
+            return pid == id.pid
+        }
+        return self.name.localizedCaseInsensitiveContains(name)
     }
 
     private func checkIdentity() throws {
@@ -70,7 +84,55 @@ struct ProcessReading: Identifiable, Sendable {
     }
 }
 
+struct ProcessSnapshot: Sendable {
+    var readings: [ProcessReading] = []
+    func processIDs(root: pid_t, applicationPIDs: Set<pid_t>,
+                    responsiblePID: (pid_t) -> pid_t = { ProcessSampler.responsiblePID?($0) ?? -1 },
+                    parentPID: (pid_t) -> pid_t? = ProcessSampler.parentPID) -> Set<pid_t> {
+        var result: Set<pid_t> = [root]
+        var membership: [pid_t: Bool] = [root: true]
+        for pid in applicationPIDs where pid != root {
+            membership[pid] = false
+        }
+        var path: [pid_t] = []
+        for reading in readings {
+            path.removeAll(keepingCapacity: true)
+            var pid = reading.id.pid
+            var matches = false
+            while true {
+                if let known = membership[pid] {
+                    matches = known
+                    break
+                }
+                // Mark the path before following links so cycles resolve to false.
+                membership[pid] = false
+                path.append(pid)
+                let responsible = responsiblePID(pid)
+                if responsible > 0 && responsible != pid {
+                    pid = responsible
+                } else if let parent = parentPID(pid) {
+                    pid = parent
+                } else {
+                    break
+                }
+            }
+            for pid in path {
+                membership[pid] = matches
+            }
+            if matches { result.insert(reading.id.pid) }
+        }
+        return result
+    }
+}
+
 final class ProcessSampler {
+    fileprivate static let responsiblePID: (@convention(c) (pid_t) -> pid_t)? = {
+        if let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") {
+            return unsafeBitCast(symbol, to: (@convention(c) (pid_t) -> pid_t).self)
+        }
+        return nil
+    }()
+
     struct QoSActivity {
         let backgroundTime: UInt64
         let otherTime: UInt64
@@ -113,11 +175,21 @@ final class ProcessSampler {
         }
     }
 
-    func sample() -> [ProcessReading] {
+    static func parentPID(_ pid: pid_t) -> pid_t? {
+        var info = proc_bsdshortinfo()
+        let size = Int32(MemoryLayout.size(ofValue: info))
+        if proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size {
+            return pid_t(info.pbsi_ppid)
+        }
+        return nil
+    }
+
+    func sample() -> ProcessSnapshot {
         let now = mach_absolute_time()
         let ticks = Double(now - lastTime)
         lastTime = now
         let uid = geteuid()
+        var snapshot = ProcessSnapshot()
         let filter = UInt32(uid == 0 ? PROC_ALL_PIDS : PROC_UID_ONLY)
         let pidSize = MemoryLayout<pid_t>.stride
         let capacity = Int(max(0, proc_listpids(filter, uid, nil, 0))) / pidSize + 64
@@ -125,8 +197,7 @@ final class ProcessSampler {
         let bytes = proc_listpids(filter, uid, &pids, Int32(capacity * pidSize))
         let pidCount = Int(max(bytes, 0)) / pidSize
         let gpuTimes = Self.gpuTimes()
-        var rows: [ProcessReading] = []
-        rows.reserveCapacity(pidCount)
+        snapshot.readings.reserveCapacity(pidCount)
         var usage = rusage_info_v6()
         for pid in pids.prefix(pidCount) where pid > 0 {
             if Self.readUsage(pid, into: &usage) {
@@ -142,7 +213,7 @@ final class ProcessSampler {
                     }
                     return nil
                 }
-                rows.append(ProcessReading(
+                snapshot.readings.append(ProcessReading(
                     id: id,
                     isBackground: qos.isBackground,
                     cpu: rate(cpu, old?.cpu, 100),
@@ -155,7 +226,7 @@ final class ProcessSampler {
         }
         swap(&previous, &current)
         current.removeAll(keepingCapacity: true)
-        return rows
+        return snapshot
     }
 
     private static func gpuTimes() -> [pid_t: UInt64] {
