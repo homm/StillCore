@@ -97,6 +97,7 @@ final class AppDependencies: ObservableObject {
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
     private var metricsWorker: MetricsWorker?
+    private var previousMetrics: Metrics?
     private let metricsSubject = PassthroughSubject<(metrics: Metrics, processes: ProcessSnapshot?), Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
@@ -165,6 +166,17 @@ final class AppDependencies: ObservableObject {
                 ? effectiveFrequency / (Float(coreCount) * Float(frequency)) : 0
             metrics.cpuTiers[index] = tier
         }
+        // Reject implausibly low temperatures without hiding cooling at idle.
+        let minimumTemperature: Float = 20
+        if let previousMetrics {
+            if metrics.temp.cpuTempAvg < minimumTemperature {
+                metrics.temp.cpuTempAvg = previousMetrics.temp.cpuTempAvg
+            }
+            if metrics.temp.gpuTempAvg < minimumTemperature {
+                metrics.temp.gpuTempAvg = previousMetrics.temp.gpuTempAvg
+            }
+        }
+        previousMetrics = metrics
         metricsSubject.send((metrics, processes))
         if !metricsError.isEmpty {
             metricsError = ""
