@@ -7,14 +7,14 @@
   <title>StillCore — Understand your Mac’s energy use</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f7f7f4;
-      --text: #1f2328;
-      --muted: #666d76;
-      --line: #d9d9d2;
-      --panel: #ffffff;
-      --accent: #0f8f3f;
-      --accent-strong: #0b6f31;
+      color-scheme: dark;
+      --bg: #1d2d38;
+      --text: #f2f6f9;
+      --copy: #e2eaf0;
+      --muted: #afc2cf;
+      --line: #405868;
+      --panel: #294052;
+      --accent: #b9f561;
     }
 
     * {
@@ -34,7 +34,7 @@
     }
 
     main {
-      width: min(820px, calc(100% - 32px));
+      width: min(920px, calc(100% - 64px));
       margin: 0 auto;
     }
 
@@ -71,7 +71,7 @@
 
     .eyebrow {
       margin: 0;
-      color: var(--accent-strong);
+      color: var(--accent);
       font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
@@ -88,7 +88,7 @@
 
     .lede {
       max-width: 680px;
-      color: var(--muted);
+      color: var(--copy);
       font-size: clamp(18px, 2.4vw, 22px);
     }
 
@@ -96,7 +96,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-      margin-top: 32px;
+      margin: 32px 0 20px;
     }
 
     .button {
@@ -117,7 +117,7 @@
     .button.primary {
       border-color: var(--accent);
       background: var(--accent);
-      color: #ffffff;
+      color: var(--bg);
     }
 
     .button svg {
@@ -128,20 +128,20 @@
     }
 
     .button:hover {
-      box-shadow: 0 0 0 2px rgb(31 35 40 / 0.1);
+      box-shadow: 0 0 0 2px var(--line);
     }
 
     .button.primary:hover {
-      box-shadow: 0 0 0 4px rgb(15 143 63 / 0.2);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
     }
 
     a:focus-visible {
-      outline: 3px solid var(--accent-strong);
+      outline: 3px solid var(--accent);
       outline-offset: 5px;
     }
 
     .compatibility {
-      margin-top: 20px;
+      margin: 10px 0 0;
       color: var(--muted);
       font-size: 14px;
     }
@@ -150,7 +150,7 @@
       max-width: 720px;
       margin: 0 auto;
       padding: 0 0 50px;
-      color: var(--muted);
+      color: var(--copy);
       font-size: 20px;
       line-height: 1.65;
     }
@@ -171,7 +171,7 @@
 
     .section-label {
       margin: 0 0 18px;
-      color: var(--accent-strong);
+      color: var(--accent);
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.1em;
@@ -187,7 +187,7 @@
     }
 
     .feature p:not(.section-label), .proof-copy p:not(.section-label) {
-      color: var(--muted);
+      color: var(--copy);
       font-size: 17px;
     }
 
@@ -220,10 +220,10 @@
 
     .proof {
       display: grid;
-      grid-template-columns: 0.85fr 1.15fr;
+      grid-template-columns: 1fr 1fr;
       gap: 64px;
       padding: 48px;
-      background: #eaf0e6;
+      background: #213545;
       border-radius: 20px;
     }
 
@@ -241,7 +241,7 @@
 
     th, td {
       padding: 16px 0;
-      border-bottom: 1px solid #cbd6c5;
+      border-bottom: 1px solid var(--line);
       text-align: left;
     }
 
@@ -296,12 +296,6 @@
 
     footer p {
       margin: 0;
-    }
-
-    @media (max-width: 1000px) {
-      .hero { padding-top: 56px; }
-      .feature { gap: 32px; }
-      .proof { gap: 32px; padding: 32px; }
     }
 
     @media (max-width: 800px) {
@@ -365,6 +359,7 @@
         </a>
       </div>
       <p class="compatibility">Apple Silicon · macOS 14+ · Free &amp; open source</p>
+      <p class="compatibility"><strong>macOS 27 ready.</strong> If your old monitor stopped reporting power after the upgrade, StillCore can take its place.</p>
       </div>
       <figure class="popover">
         <img src="app.png" width="466" height="620" alt="StillCore opened from the menu bar, showing power, activity, temperature, and top processes">
@@ -437,14 +432,14 @@
       </div>
       <div>
         <table>
-          <caption>Chip power in the author’s tests</caption>
+          <caption>Total system power</caption>
           <tbody>
-            <tr><th scope="row">Idle baseline</th><td>0.17 W</td></tr>
+            <tr><th scope="row">Mac idle, StillCore off</th><td>0.17 W</td></tr>
             <tr><th scope="row">StillCore in the menu bar<span>1-second update interval</span></th><td>0.17 W</td></tr>
             <tr><th scope="row">StillCore window open<span>1-second update interval</span></th><td>0.21 W</td></tr>
           </tbody>
         </table>
-        <p class="test-note">These are chip power readings, not the StillCore process’s own power consumption. Results depend on hardware and workload. <a href="https://github.com/homm/StillCore#why-i-built-it">Read about the tests in the README.</a></p>
+        <p class="test-note"><a href="https://github.com/homm/StillCore#why-i-built-it">Read about the tests in the README.</a></p>
       </div>
     </section>
 
