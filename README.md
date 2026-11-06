@@ -18,7 +18,7 @@ It’s designed for everyday monitoring rather than deep profiling. It is built 
 - Switch between Automatic and Power Save modes for the current power source.
 
 <p align="center">
-<img src="docs/app.png" alt="StillCore app screenshot" width="466">
+<img width="466" src="docs/app.png" alt="StillCore app screenshot">
 </p>
 
 
@@ -28,6 +28,46 @@ Prebuilt downloads are available on the GitHub releases page:
 https://github.com/homm/StillCore/releases
 
 Requires an Apple Silicon Mac with macOS 14 or newer.
+
+
+## Features
+
+<img width="420" align="right" src="docs/power-and-activity.png" alt="Power charts with a marker on a spike">
+
+### Power and Activity
+
+Compare total system power with chip power and see how much the CPU, GPU, and Neural Engine contribute. Use the chart marker to see what was happening when power spiked.
+
+<br clear="all">
+
+
+<img width="420" align="right" src="docs/processes.png" alt="Top Processes sorted by CPU power">
+
+### Top Processes
+
+Sort processes by CPU usage, GPU usage, memory, or CPU power to find what’s using the most resources. Filter by application, process name, or PID. Quit a process or apply a background policy from the list.
+
+<br clear="all">
+
+
+<img width="400" align="right" src="docs/battery.png" alt="Battery popover during an unplugged session">
+
+### Battery Charge and Drain
+
+See how much charge remains and how much you’ve used since unplugging. The battery popover also shows how long your Mac was awake and asleep during that session.
+
+macOS can report 100% below full capacity. StillCore can show charge above that threshold, so you can see it drop after unplugging while macOS still reads 100%.
+
+<br clear="all">
+
+
+<img width="248" align="right" src="docs/menu.png" alt="Menu bar metrics">
+
+### Menu Bar and Floating Window
+
+Choose which metrics appear in the menu bar so you can check them at a glance. Detach the main window to keep the charts visible while you work.
+
+<br clear="all">
 
 
 ## Why I Built It
