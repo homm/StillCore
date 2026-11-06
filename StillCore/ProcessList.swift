@@ -153,7 +153,7 @@ struct ProcessList: View {
             let isPID = !filter.isEmpty && filter.allSatisfy { $0.isASCII && $0.isNumber }
             // PID 0 cannot match a sampled process, including when numeric input overflows.
             let pid = isPID ? pid_t(filter) ?? 0 : nil
-            filteredReadings = readings.filter { $0.matches(name: filter, pid: pid, processIDs: applicationProcessIDs) }
+            filteredReadings = snapshot.match(name: filter, pid: pid, processIDs: applicationProcessIDs)
         }
         if usePreviousOrder, !lastDisplayedIDs.isEmpty {
             let currentReadings = Dictionary(uniqueKeysWithValues: filteredReadings.map { ($0.id, $0) })
@@ -194,6 +194,7 @@ struct ProcessList: View {
             AppDependencies.shared.setProcessSampler(nil)
         }
         .onReceive(processPublisher) { sample in
+            sample.removeExitedNames()
             snapshot = sample
             if usePreviousOrder, sample.readings.contains(where: { $0.cpu != nil }) {
                 usePreviousOrder = false
@@ -249,8 +250,7 @@ struct ProcessList: View {
             topReadings = Array(topReadings.prefix(6)) + [selectedProcess]
         }
         let cpuFont = sortColumn == .cpu ? AppFonts.chartLegend : AppFonts.processValue
-        var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-        let names = topReadings.map { $0.displayName(using: &path) }
+        let names = topReadings.map { snapshot.name(for: $0) }
         let selectedIndex = topReadings.firstIndex { $0.id == selectedProcessID }
         let cpuWidth = topReadings.reduce(Column.cpu.width) { width, process in
             let text = process.cpu.map { String(format: "%.1f%%", $0) } ?? "—"
