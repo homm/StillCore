@@ -9,6 +9,7 @@ struct ProcessFilterChecks {
         }
     }
 
+    @MainActor
     static func main() throws {
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/bin/sleep")
@@ -21,31 +22,34 @@ struct ProcessFilterChecks {
             }
         }
         let childPID = child.processIdentifier
+        var usage = rusage_info_v6()
+        check(ProcessSampler.readUsage(childPID, into: &usage), "The child process must provide its identity")
         let process = ProcessReading(
-            id: .init(pid: childPID, start: 1),
+            id: .init(pid: childPID, start: usage.ri_proc_start_abstime),
             isBackground: false, cpu: nil, gpu: nil, memory: 0, power: nil
         )
-        check(process.matches(name: "", pid: nil), "An empty filter must match every process")
-        check(process.matches(name: "LEe", pid: nil), "Names must match substrings without case sensitivity")
-        check(!process.matches(name: "Other", pid: nil), "Unrelated names must not match")
-        check(process.matches(name: String(childPID), pid: childPID), "An exact PID must match")
+        var snapshot = ProcessSnapshot()
+        snapshot.readings = [process]
+        check(snapshot.match(name: "", pid: nil).contains { $0.id == process.id }, "An empty filter must match every process")
+        check(snapshot.match(name: "LEe", pid: nil).contains { $0.id == process.id }, "Names must match substrings without case sensitivity")
+        check(!snapshot.match(name: "Other", pid: nil).contains { $0.id == process.id }, "Unrelated names must not match")
+        check(snapshot.match(name: String(childPID), pid: childPID).contains { $0.id == process.id }, "An exact PID must match")
         let partialPID = String(childPID).dropLast()
-        check(!process.matches(name: String(partialPID), pid: pid_t(partialPID)), "Numbers must not match partial PIDs or names")
+        check(!snapshot.match(name: String(partialPID), pid: pid_t(partialPID)).contains { $0.id == process.id }, "Numbers must not match partial PIDs or names")
         let overflowingPID = "999999999999999999999999"
-        check(!process.matches(name: overflowingPID, pid: pid_t(overflowingPID) ?? 0), "An overflowing PID must not match")
-        check(process.matches(name: "sleep", pid: nil, processIDs: [childPID]), "Text and application filters must match together")
-        check(!process.matches(name: "Other", pid: nil, processIDs: [childPID]), "Application membership must not bypass text filtering")
-        check(!process.matches(name: "sleep", pid: nil, processIDs: [0]), "Text matches outside the application must be excluded")
-        check(process.matches(name: String(childPID), pid: childPID, processIDs: [childPID]), "An exact PID inside the application must match")
-        check(!process.matches(name: String(childPID), pid: childPID, processIDs: [0]), "An exact PID must not bypass the application filter")
-        check(!process.matches(name: "", pid: nil, processIDs: []), "An empty application tree must match no processes")
+        check(!snapshot.match(name: overflowingPID, pid: pid_t(overflowingPID) ?? 0).contains { $0.id == process.id }, "An overflowing PID must not match")
+        check(snapshot.match(name: "sleep", pid: nil, processIDs: [childPID]).contains { $0.id == process.id }, "Text and application filters must match together")
+        check(!snapshot.match(name: "Other", pid: nil, processIDs: [childPID]).contains { $0.id == process.id }, "Application membership must not bypass text filtering")
+        check(!snapshot.match(name: "sleep", pid: nil, processIDs: [0]).contains { $0.id == process.id }, "Text matches outside the application must be excluded")
+        check(snapshot.match(name: String(childPID), pid: childPID, processIDs: [childPID]).contains { $0.id == process.id }, "An exact PID inside the application must match")
+        check(!snapshot.match(name: String(childPID), pid: childPID, processIDs: [0]).contains { $0.id == process.id }, "An exact PID must not bypass the application filter")
+        check(!snapshot.match(name: "", pid: nil, processIDs: []).contains { $0.id == process.id }, "An empty application tree must match no processes")
 
         let parents: [pid_t: pid_t] = [
             500: 1, 400: 300, 300: 200, 200: 100, 100: 1,
             600: 1, 700: 600, 800: 700, 900: 1
         ]
         let parentPID: (pid_t) -> pid_t? = { parents[$0] }
-        var snapshot = ProcessSnapshot()
         snapshot.readings = parents.keys.map {
             ProcessReading(id: .init(pid: $0, start: 1), isBackground: false,
                            cpu: nil, gpu: nil, memory: 0, power: nil)
@@ -74,9 +78,9 @@ struct ProcessFilterChecks {
               "An unavailable ancestor must not connect descendants to the application")
         snapshot.readings.append(process)
         let childResponsibility: (pid_t) -> pid_t = { $0 == childPID ? 100 : responsiblePID($0) }
-        check(process.matches(name: "sleep", pid: nil, processIDs: snapshot.processIDs(root: 100, applicationPIDs: [100, 400], responsiblePID: childResponsibility, parentPID: parentPID)),
+        check(snapshot.match(name: "sleep", pid: nil, processIDs: snapshot.processIDs(root: 100, applicationPIDs: [100, 400], responsiblePID: childResponsibility, parentPID: parentPID)).contains { $0.id == process.id },
               "Text filtering must find a process attributed to the selected application through responsibility")
-        check(!process.matches(name: "sleep", pid: nil, processIDs: snapshot.processIDs(root: 400, applicationPIDs: [100, 400], responsiblePID: childResponsibility, parentPID: parentPID)),
+        check(!snapshot.match(name: "sleep", pid: nil, processIDs: snapshot.processIDs(root: 400, applicationPIDs: [100, 400], responsiblePID: childResponsibility, parentPID: parentPID)).contains { $0.id == process.id },
               "A matching process attributed to another application must be excluded")
         let sampler = ProcessSampler()
         let running = sampler.sample()
@@ -85,16 +89,29 @@ struct ProcessFilterChecks {
         check(ProcessSampler.parentPID(childPID) == getpid(), "PPID lookup must return the live parent")
         check(running.processIDs(root: getpid(), applicationPIDs: [getpid()], responsiblePID: { _ in -1 }).contains(childPID),
               "Live PPID lookup must find a child when responsibility is unavailable")
+        check(running.name(for: process) == "sleep",
+              "Display names must fall back to the executable name for command-line processes")
         child.terminate()
         child.waitUntilExit()
-        check(!process.matches(name: "sleep", pid: nil), "Name filtering must query the live process instead of retaining its old name")
+        check(running.name(for: process) == "sleep",
+              "A snapshot must retain a resolved display name after the process exits")
+        check(ProcessSnapshot().name(for: process) == String(childPID),
+              "A new snapshot must resolve names again and fall back to PID for an exited process")
+        let reusedPID = ProcessReading(id: .init(pid: childPID, start: 2),
+                                       isBackground: false, cpu: nil, gpu: nil, memory: 0, power: nil)
+        check(running.name(for: reusedPID) == String(childPID),
+              "The display name cache must distinguish process identities with the same PID")
+        check(running.match(name: "sleep", pid: nil).contains { $0.id == process.id }, "Filtering must use the same cached name as display within a snapshot")
+        var refreshed = ProcessSnapshot()
+        refreshed.readings = [process]
+        check(!refreshed.match(name: "sleep", pid: nil).contains { $0.id == process.id }, "A new snapshot must refresh the name used for filtering")
         check(ProcessSampler.parentPID(childPID) == nil, "PPID lookup must fail for an exited child")
         check(!sampler.sample().readings.contains { $0.id.pid == childPID },
               "Refreshing the snapshot must remove exited children")
 
         let sample = ProcessSampler().sample()
         let current = sample.readings.first { $0.id.pid == getpid() }
-        check(current?.name.isEmpty == false, "A sampled process must provide its system name on demand")
+        check(current.map { !sample.name(for: $0).isEmpty } == true, "A sampled process must provide its name on demand")
         print("PASS: process filters, parent and responsible links, application boundaries, XPC services and live snapshots")
     }
 }

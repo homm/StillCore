@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 enum PresentationMode: Equatable {
@@ -14,6 +15,7 @@ final class MenuPresentationState: ObservableObject {
     fileprivate var onModeChange: (() -> Void)?
     var isConfirmingProcessTermination = false
     var onMinimumContentHeightChange: ((CGFloat) -> Void)?
+    var moveProcessSelection: ((Int) -> Bool)?
 
     func setPresentationMode(_ mode: PresentationMode) {
         guard self.mode != mode else { return }
@@ -131,6 +133,7 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
     private var currentWindow: NSWindow
     private let attachedWindow: AttachedWindow
     private let floatingWindow: FloatingWindow
+    private var keyDownMonitor: Any?
 
     private var presentationMode: PresentationMode { presentationState.mode }
 
@@ -234,9 +237,30 @@ final class MenuPresentationController<Content: View>: NSObject, NSWindowDelegat
         currentWindow.makeKeyAndOrderFront(nil)
         currentWindow.makeFirstResponder(nil)
         syncActivationPolicy()
+        if keyDownMonitor == nil {
+            keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if let self, event.window === currentWindow, currentWindow.isKeyWindow,
+                   !(currentWindow.firstResponder is NSTextView),
+                   event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty {
+                    switch Int(event.keyCode) {
+                    case kVK_UpArrow:
+                        if presentationState.moveProcessSelection?(-1) == true { return nil }
+                    case kVK_DownArrow:
+                        if presentationState.moveProcessSelection?(1) == true { return nil }
+                    default:
+                        break
+                    }
+                }
+                return event
+            }
+        }
     }
 
     private func hideWindow() {
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
+            self.keyDownMonitor = nil
+        }
         currentWindow.orderOut(nil)
         presentationState.setWindowVisible(false)
         syncActivationPolicy()

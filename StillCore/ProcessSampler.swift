@@ -1,5 +1,8 @@
-import Foundation
+import AppKit
 import IOKit
+
+// The SDK macro is unavailable to Swift.
+private let PROC_PIDPATHINFO_MAXSIZE = 4 * Int(MAXPATHLEN)
 
 struct ProcessReading: Identifiable, Sendable {
     struct ID: Hashable, Sendable {
@@ -14,33 +17,24 @@ struct ProcessReading: Identifiable, Sendable {
     let memory: UInt64
     let power: Double?
 
-    var name: String {
-        withUnsafeTemporaryAllocation(of: CChar.self, capacity: 2 * Int(MAXCOMLEN) + 1) { buffer in
-            let length = proc_name(id.pid, buffer.baseAddress, UInt32(buffer.count))
-            return String(decoding: UnsafeRawBufferPointer(buffer).prefix(Int(max(length, 0))).prefix { $0 != 0 }, as: UTF8.self)
+    fileprivate func resolveName() -> String {
+        if let name = NSRunningApplication(processIdentifier: id.pid)?.localizedName, !name.isEmpty {
+            return name
         }
-    }
-
-    func displayName(using path: inout [CChar]) -> String {
-        let length = proc_pidpath(id.pid, &path, UInt32(path.count))
-        if length > 0 {
-            return path.withUnsafeBytes { buffer in
-                let bytes = buffer.prefix(Int(length)).prefix { $0 != 0 }
-                let start = bytes.lastIndex(of: 0x2F).map { $0 + 1 } ?? bytes.startIndex
-                return String(decoding: bytes[start...], as: UTF8.self)
+        return withUnsafeTemporaryAllocation(of: CChar.self, capacity: PROC_PIDPATHINFO_MAXSIZE) { buffer in
+            buffer.initialize(repeating: 0)
+            var length = proc_pidpath(id.pid, buffer.baseAddress, UInt32(buffer.count))
+            let isPath = length > 0
+            if !isPath {
+                length = proc_name(id.pid, buffer.baseAddress, UInt32(buffer.count))
             }
+            if length <= 0 { return String(id.pid) }
+            var bytes = UnsafeRawBufferPointer(buffer).prefix(Int(length))
+            if isPath, let slash = bytes.lastIndex(of: 0x2F) {
+                bytes = bytes[(slash + 1)...]
+            }
+            return String(decoding: bytes, as: UTF8.self)
         }
-        let name = name
-        return name.isEmpty ? String(id.pid) : name
-    }
-
-    func matches(name: String, pid: pid_t?, processIDs: Set<pid_t>? = nil) -> Bool {
-        if let processIDs, !processIDs.contains(id.pid) { return false }
-        if name.isEmpty { return true }
-        if let pid {
-            return pid == id.pid
-        }
-        return self.name.localizedCaseInsensitiveContains(name)
     }
 
     private func checkIdentity() throws {
@@ -85,7 +79,54 @@ struct ProcessReading: Identifiable, Sendable {
 }
 
 struct ProcessSnapshot: Sendable {
+    @MainActor
+    fileprivate final class NameCache {
+        var values: [ProcessReading.ID: String] = [:]
+
+        nonisolated init() {}
+    }
+
+    private let namesCache: NameCache
     var readings: [ProcessReading] = []
+
+    init() {
+        namesCache = NameCache()
+    }
+
+    fileprivate init(namesCache: NameCache) {
+        self.namesCache = namesCache
+    }
+
+    @MainActor
+    func name(for reading: ProcessReading) -> String {
+        if let name = namesCache.values[reading.id] {
+            return name
+        }
+        let name = reading.resolveName()
+        namesCache.values[reading.id] = name
+        return name
+    }
+
+    @MainActor
+    func match(name: String, pid: pid_t?, processIDs: Set<pid_t>? = nil) -> [ProcessReading] {
+        if name.isEmpty && processIDs == nil { return readings }
+        let lowercasedName = name.lowercased()
+        return readings.filter { reading in
+            if let processIDs, !processIDs.contains(reading.id.pid) { return false }
+            if lowercasedName.isEmpty { return true }
+            if let pid {
+                return pid == reading.id.pid
+            }
+            return self.name(for: reading).lowercased().contains(lowercasedName)
+        }
+    }
+
+    @MainActor
+    func removeExitedNames() {
+        let processIDs = Set(readings.map(\.id))
+        namesCache.values = namesCache.values.filter { processIDs.contains($0.key) }
+    }
+
     func processIDs(root: pid_t, applicationPIDs: Set<pid_t>,
                     responsiblePID: (pid_t) -> pid_t = { ProcessSampler.responsiblePID?($0) ?? -1 },
                     parentPID: (pid_t) -> pid_t? = ProcessSampler.parentPID) -> Set<pid_t> {
@@ -126,6 +167,7 @@ struct ProcessSnapshot: Sendable {
 }
 
 final class ProcessSampler {
+    private let namesCache = ProcessSnapshot.NameCache()
     fileprivate static let responsiblePID: (@convention(c) (pid_t) -> pid_t)? = {
         if let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") {
             return unsafeBitCast(symbol, to: (@convention(c) (pid_t) -> pid_t).self)
@@ -189,7 +231,7 @@ final class ProcessSampler {
         let ticks = Double(now - lastTime)
         lastTime = now
         let uid = geteuid()
-        var snapshot = ProcessSnapshot()
+        var snapshot = ProcessSnapshot(namesCache: namesCache)
         let filter = UInt32(uid == 0 ? PROC_ALL_PIDS : PROC_UID_ONLY)
         let pidSize = MemoryLayout<pid_t>.stride
         let capacity = Int(max(0, proc_listpids(filter, uid, nil, 0))) / pidSize + 64
