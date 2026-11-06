@@ -362,6 +362,24 @@ struct ProcessList: View {
             if !ids.isEmpty {
                 lastDisplayedIDs = ids
             }
+            presentationState.moveProcessSelection = { offset in
+                if isFilterPresented || ids.isEmpty {
+                    return false
+                }
+                let nextIndex: Int
+                if let index = ids.firstIndex(where: { $0 == selectedProcessID }) {
+                    nextIndex = index + offset
+                } else {
+                    nextIndex = offset > 0 ? 0 : ids.count - 1
+                }
+                if ids.indices.contains(nextIndex) {
+                    selectedProcessID = ids[nextIndex]
+                }
+                return true
+            }
+        }
+        .onDisappear {
+            presentationState.moveProcessSelection = nil
         }
     }
 
