@@ -34,16 +34,23 @@ Requires an Apple Silicon Mac with macOS 14 or newer.
 
 I often work on a laptop and want to understand what is happening with energy usage. I used MX Power Gadget for this, but later found that it reports misleadingly low power for itself while consuming a lot of CPU power in practice[^mx-power-gadget]. That led me through several monitoring experiments, and eventually to the decision that I could build something better for my own workflow.
 
-During development, I paid attention to StillCore's own footprint. The table below shows power usage while running different monitoring apps as `CHIP`: `CPU` + `GPU` in watts. For example, the idle baseline without any background apps is `0.17`: `0.01` + `0.00`.
-
-| App                                         | Mode                   | 1 sec update interval                              | 100ms update interval                              |
-| ------------------------------------------- | ---------------------- | -------------------------------------------------- | -------------------------------------------------- |
-|                                             |                        | `CHIP`: `CPU` + `GPU`                              | `CHIP`: `CPU` + `GPU`                              |
-| **StillCore**                               | In tray<br>Interactive | `0.17`: `0.01` + `0.00`<br>`0.21`: `0.02` + `0.00` | `0.19`: `0.02` + `0.00`<br>`0.47`: `0.06` + `0.02` |
-| **Activity Monitor** macOS 27.2             | In tray<br>Interactive | `0.3`: `0.1` + `0.00`<br>`0.53`: `0.21` + `0.00`   | -<br>-                                             |
-| **MX Power Gadget** 1.6.4[^mx-power-gadget] | In tray<br>Interactive | `1.93`: `1.17` + `0.00`<br>`1.93`: `1.18` + `0.01` | -<br>-                                             |
+I wanted StillCore to stay in the menu bar all day without adding much overhead. In my tests, with StillCore running in the menu bar and updating once a second, chip power matched the idle baseline of 0.17 W. With the window open, it rose to 0.21 W. For comparison, chip power was lower with StillCore updating every 100 ms (0.47 W) than with Activity Monitor updating once a second (0.53 W), with their windows open.
 
 [^mx-power-gadget]: MX Power Gadget uses `powermetrics` for its measurements, but according to this [Habr article in Russian](https://habr.com/ru/articles/858736/), it starts a new `powermetrics` process for each sample. Because `powermetrics` has a relatively expensive startup phase, the utility can consume a few watts in practice even when its own charts show near-zero power.
+
+Here are some cases where StillCore helped me track down unexpected power use.
+
+#### Codex GPU usage
+
+StillCore’s GPU charts showed spikes up to 1.5 W on my M4 Pro while Codex was thinking. After some experimenting, I traced the extra GPU load to a tiny spinner in the sidebar. I [filed an issue](https://github.com/openai/codex/issues/16857) and started hiding the sidebar while Codex worked. The bug has since been fixed.
+
+#### Mission Control on macOS 27
+
+I traced CPU spikes during trackpad gestures to `MenuBarAgent`. It used one CPU core while I moved my fingers to open Mission Control or App Exposé, then dropped as soon as I held them still. I used StillCore to apply a background task policy to the process and limit its impact.
+
+#### Playing Civilization VI over the Atlantic
+
+A transatlantic flight lasts about ten hours. By measuring how much power Civilization VI draws with StillCore, I can tune the game settings so I can play for the whole flight on a single charge. 😆
 
 
 ## Development
