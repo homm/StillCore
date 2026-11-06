@@ -2,25 +2,24 @@
 
 StillCore is built for continuous Apple Silicon monitoring with low overhead. It stays in the macOS menu bar, quietly tracks what the Mac is doing, and is ready when something suddenly feels off: the laptop gets warm, battery drain jumps, or a background task briefly spikes power usage.
 
-Main features:
+It’s designed for everyday monitoring rather than deep profiling. It is built on top of [macmon](https://github.com/vladkens/macmon), which provides the core Apple Silicon metrics.
 
-- Full-system power chart (including display, speakers, and peripherals). Useful when a 5 W CPU increase turns into a 10 W system increase.
-- Chip, CPU and GPU power charts for more precise diagnostics.
+
+## Main features:
+
+- System and chip power with stacked CPU, GPU and Neural Engine readings.
 - CPU and GPU frequency and usage on the combined chart.
 - Temperature charts.
+- Top processes by CPU and GPU usage, memory or CPU power, with controls to quit them or limit their power use.
 - Adjustable update interval from 100 ms to 10 seconds.
-- Quick menu bar access with an optional always-open window.
-- Battery session tracking, such as 15% used over 2 hours since the last charge.
+- Customizable menu bar metrics, a battery icon or percentage, and an optional always-open window.
+- Battery drain tracking with active and sleep time since unplugging.
+- Detailed battery charge statistics.
+- Switch between Automatic and Power Save modes for the current power source.
 
-<img src="docs/app.png" alt="StillCore app screenshot" width="487">
-
-StillCore is for everyday monitoring rather than deep profiling. It is built on top of [macmon](https://github.com/vladkens/macmon), which provides the core Apple Silicon metrics.
-
-
-## Requirements
-
-- macOS 14 or newer
-- Apple Silicon Mac
+<p align="center">
+<img src="docs/app.png" alt="StillCore app screenshot" width="466">
+</p>
 
 
 ## Download
@@ -28,10 +27,7 @@ StillCore is for everyday monitoring rather than deep profiling. It is built on 
 Prebuilt downloads are available on the GitHub releases page:
 https://github.com/homm/StillCore/releases
 
-
-## License
-
-StillCore is released under the MIT License. The metrics core is built on [macmon](https://github.com/vladkens/macmon), sensor tables adapted from [Stats](https://github.com/exelban/stats). StillCore.app bundles the license notices for [macmon](Licenses/macmon.txt), [Stats](Licenses/Stats.txt), [DGCharts](Licenses/DGCharts.txt), and [Sparkle](Licenses/Sparkle.txt).
+Requires an Apple Silicon Mac with macOS 14 or newer.
 
 
 ## Why I Built It
@@ -50,7 +46,9 @@ During development, I paid attention to StillCore's own footprint. The table bel
 [^mx-power-gadget]: MX Power Gadget uses `powermetrics` for its measurements, but according to this [Habr article in Russian](https://habr.com/ru/articles/858736/), it starts a new `powermetrics` process for each sample. Because `powermetrics` has a relatively expensive startup phase, the utility can consume a few watts in practice even when its own charts show near-zero power.
 
 
-## Build From Source
+## Development
+
+### Build From Source
 
 Building from source requires Xcode with Swift 6 support and network access for Swift Package dependencies.
 
@@ -69,10 +67,9 @@ make clean
 ```
 
 
-## Development
+### Local Development
 
 Development builds use `CONFIGURATION=Debug` by default.
-Pass `CONFIGURATION=Release` to build and run the Release configuration with the same command.
 
 Install repository-managed Git hooks once per checkout:
 
@@ -80,51 +77,53 @@ Install repository-managed Git hooks once per checkout:
 make install-hooks
 ```
 
-Build and run from the terminal:
+Make commands:
 
 ```sh
+# Build and run from the terminal
 make run
-```
 
-Build and open the app bundle:
+# Build and run the Release configuration
+make run Release
 
-```sh
+# Build and open the app bundle
 make open-app
-```
 
-Launch Instruments Time Profiler for a Release build:
-
-```sh
+# Profile a Release build with Instruments Time Profiler
 make profile
 ```
 
 
-## Local Metrics Core Development
+### Local Metrics Core Development
 
-Use `LOCAL=1` when you want to develop or test StillCore together
-with local changes in the metrics collection core.
+Use `LOCAL=1` to develop or test StillCore with local changes to `macmon`.
 
 Additional requirements:
 
 - Rust toolchain with Cargo
-- Xcode command line tools
 - Local checkouts of `macmon` and `macmon-bindings` next to this repository
 
 Clone the sibling repositories and build the local `macmon` xcframework:
 
 ```sh
-cd ..
+pushd ..
 git clone https://github.com/homm/macmon.git
 git clone https://github.com/homm/macmon-bindings.git
-cd StillCore
-make -C ../macmon xcframework
+make -C macmon xcframework
+popd
 ```
 
 Build and open StillCore against the local metrics core:
 
 ```sh
-LOCAL=1 make open-app
+make -C ../macmon xcframework
+make open-app LOCAL=1
 ```
 
 `LOCAL=1` uses `StillCore.local.xcworkspace`, expects `../macmon/dist/CMacmon.xcframework`,
 and uses the sibling `../macmon-bindings` checkout.
+
+
+## License
+
+StillCore is released under the MIT License. The metrics core is built on [macmon](https://github.com/vladkens/macmon), sensor tables adapted from [Stats](https://github.com/exelban/stats). StillCore.app bundles the license notices for [macmon](Licenses/macmon.txt), [Stats](Licenses/Stats.txt), [DGCharts](Licenses/DGCharts.txt), and [Sparkle](Licenses/Sparkle.txt).
