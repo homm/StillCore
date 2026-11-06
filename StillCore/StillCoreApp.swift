@@ -96,7 +96,7 @@ final class AppDependencies: ObservableObject {
     @Published var socSummary: String = ""
     @Published var metricsError: String = ""
     private(set) var socInfo: SocInfo?
-    private var metricsSchedule: MetricsSchedule?
+    private var metricsWorker: MetricsWorker?
     private let metricsSubject = PassthroughSubject<(metrics: Metrics, processes: ProcessSnapshot?), Never>()
     @Published private(set) var chartHistoryResetRevision = 0
 
@@ -112,8 +112,8 @@ final class AppDependencies: ObservableObject {
         metricsSubject.compactMap(\.processes).eraseToAnyPublisher()
     }
 
-    func setProcessesVisible(_ visible: Bool) {
-        metricsSchedule?.setProcessesVisible(visible)
+    func setProcessSampler(_ sampler: sending ProcessSampler?) {
+        metricsWorker?.setProcessSampler(sampler)
     }
 
     private init() {
@@ -122,41 +122,21 @@ final class AppDependencies: ObservableObject {
     }
 
     func startMetricsLoop() {
-        if metricsSchedule != nil { return }
+        if metricsWorker != nil { return }
         metricsError = ""
-        let schedule = MetricsSchedule(interval: .milliseconds(metricsIntervalMs))
-        metricsSchedule = schedule
-
-        Thread.detachNewThread {
-            do {
-                let sampler = try Sampler()
-                defer { sampler.close() }
-                var processSampler: ProcessSampler?
-                var lastShowing: UUID?
-
-                while true {
-                    schedule.waitForNextSample()
-                    let metrics = try sampler.metrics()
-                    let showing = schedule.processShowing
-                    if showing != lastShowing {
-                        processSampler = showing == nil ? nil : ProcessSampler()
-                        lastShowing = showing
-                    }
-                    let processes = processSampler?.sample()
-                    DispatchQueue.main.async {
-                        AppDependencies.shared.publish(metrics, processes: schedule.processShowing == showing ? processes : nil)
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    AppDependencies.shared.metricsError = String(describing: error)
-                    AppDependencies.shared.metricsSchedule = nil
-                }
+        metricsWorker = MetricsWorker(
+            interval: .milliseconds(metricsIntervalMs),
+            onSample: { [weak self] metrics, processes in
+                self?.publishMetrics(metrics, processes: processes)
+            },
+            onError: { [weak self] message in
+                self?.metricsError = message
+                self?.metricsWorker = nil
             }
-        }
+        )
     }
 
-    private func publish(_ source: Metrics, processes: ProcessSnapshot?) {
+    private func publishMetrics(_ source: Metrics, processes: ProcessSnapshot?) {
         var metrics = source
         // Keep CHIP above the stacked components and SYS above CHIP when reported totals disagree.
         metrics.chipPower = max(metrics.chipPower, metrics.cpuPower + metrics.anePower + metrics.gpuPower)
@@ -215,7 +195,7 @@ final class AppDependencies: ObservableObject {
     @Published var metricsIntervalMs: Int = AppSettings.metricsIntervalMs {
         didSet {
             AppSettings.metricsIntervalMs = metricsIntervalMs
-            metricsSchedule?.setInterval(.milliseconds(metricsIntervalMs))
+            metricsWorker?.setInterval(.milliseconds(metricsIntervalMs))
         }
     }
 

@@ -130,6 +130,8 @@ struct ProcessList: View {
     }
 
     @State private var snapshot = ProcessSnapshot()
+    @State private var lastDisplayedIDs: [ProcessReading.ID] = []
+    @State private var usePreviousOrder = true
     @State private var sortColumn = Column.power
     @State private var selectedProcessID: ProcessReading.ID?
     @State private var errorMessage: String?
@@ -152,6 +154,10 @@ struct ProcessList: View {
             // PID 0 cannot match a sampled process, including when numeric input overflows.
             let pid = isPID ? pid_t(filter) ?? 0 : nil
             filteredReadings = readings.filter { $0.matches(name: filter, pid: pid, processIDs: applicationProcessIDs) }
+        }
+        if usePreviousOrder, !lastDisplayedIDs.isEmpty {
+            let currentReadings = Dictionary(uniqueKeysWithValues: filteredReadings.map { ($0.id, $0) })
+            return lastDisplayedIDs.compactMap { currentReadings[$0] }
         }
         return filteredReadings.sorted { lhs, rhs in
             let left = value(lhs, column: column)
@@ -179,18 +185,19 @@ struct ProcessList: View {
             if !expanded {
                 selectedProcessID = nil
             }
-            AppDependencies.shared.setProcessesVisible(expanded && presentationState.isWindowVisible)
-            snapshot = ProcessSnapshot()
+            updateVisibility(expanded && presentationState.isWindowVisible)
         }
         .onReceive(presentationState.$isWindowVisible) { visible in
-            AppDependencies.shared.setProcessesVisible(isExpanded && visible)
-            snapshot = ProcessSnapshot()
+            updateVisibility(isExpanded && visible)
         }
         .onDisappear {
-            AppDependencies.shared.setProcessesVisible(false)
+            AppDependencies.shared.setProcessSampler(nil)
         }
         .onReceive(processPublisher) { sample in
             snapshot = sample
+            if usePreviousOrder, sample.readings.contains(where: { $0.cpu != nil }) {
+                usePreviousOrder = false
+            }
             updateApplicationProcesses()
             if let selectedProcessID, !sample.readings.isEmpty,
                !sample.readings.contains(where: { $0.id == selectedProcessID }) {
@@ -210,9 +217,21 @@ struct ProcessList: View {
             applicationPIDs = Set(applications.map(\.processIdentifier))
             updateApplicationProcesses()
         }
+        .onChange(of: filter) { _, _ in
+            usePreviousOrder = false
+        }
         .onChange(of: selectedApplication) { _, _ in
+            usePreviousOrder = false
             updateApplicationProcesses()
         }
+    }
+
+    private func updateVisibility(_ visible: Bool) {
+        let sampler = visible ? ProcessSampler() : nil
+        snapshot = sampler?.sample() ?? ProcessSnapshot()
+        usePreviousOrder = true
+        updateApplicationProcesses()
+        AppDependencies.shared.setProcessSampler(sampler)
     }
 
     private func updateApplicationProcesses() {
@@ -295,6 +314,7 @@ struct ProcessList: View {
                 ForEach(Column.allCases, id: \.self) { column in
                     Button {
                         sortColumn = column
+                        usePreviousOrder = false
                     } label: {
                         Text(column.rawValue)
                         .frame(height: 22)
@@ -323,11 +343,7 @@ struct ProcessList: View {
             ForEach(Array(topReadings.enumerated()), id: \.element.id) { index, process in
                 processRow(process, name: names[index], shaded: !index.isMultiple(of: 2), cpuWidth: cpuWidth)
             }
-            if readings.isEmpty {
-                Text("Sampling processes…")
-                    .foregroundStyle(.secondary)
-                    .frame(height: 22)
-            } else if topReadings.isEmpty {
+            if !readings.isEmpty && topReadings.isEmpty && (!usePreviousOrder || lastDisplayedIDs.isEmpty) {
                 Text("No matching processes")
                     .foregroundStyle(.secondary)
                     .frame(height: 22)
@@ -342,6 +358,11 @@ struct ProcessList: View {
             }
         }
         .font(Font(AppFonts.chartLegend))
+        .onChange(of: topReadings.map(\.id), initial: true) { _, ids in
+            if !ids.isEmpty {
+                lastDisplayedIDs = ids
+            }
+        }
     }
 
     private func applicationLabel(_ app: NSRunningApplication?) -> some View {
