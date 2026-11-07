@@ -9,7 +9,7 @@
 Useful `make help` commands for development:
 
 - `make app` — build `StillCore.app`
-- `LOCAL=1 make app` — build with local workspace and local `macmon` xcframework
+- `make app LOCAL=1` — build with local workspace and local `macmon` xcframework
 - `make run` — build and run `StillCore` in the current terminal
 - `make open-app` — build and open `StillCore.app`
 - `make profile` — build `StillCore` and launch Time Profiler
