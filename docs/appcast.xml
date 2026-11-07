@@ -3,6 +3,64 @@
     <channel>
         <title>StillCore</title>
         <item>
+            <title>2.0.0</title>
+            <pubDate>Sat, 07 Nov 2026 14:12:10 +0000</pubDate>
+            <sparkle:version>202611070300</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[## New Icon!
+
+
+
+## Top processes
+
+
+
+
+A short table of the current user's most resource-intensive processes, easily accessible from the main window.
+
+- Sortable columns for CPU, GPU, and memory usage, plus CPU power.
+- Filter processes by name, PID, or application.
+- You can terminate or force quit the selected process, or set a background task policy (`taskpolicy -p`), which will greatly cap maximum power consumption while performance will also degrade a lot.
+- The selected process stays selected when you hide and reopen the window.
+- Dimmed names distinguish processes with background-only CPU activity.
+
+
+
+## Battery charge and drain
+
+
+
+
+For years, macOS and iOS have used a threshold below the battery’s full capacity for the 100% reading when running on battery power. As a result, after charging, the battery can appear to stay at 100% for longer than it should.
+
+StillCore used to read the actual current and maximum capacity values from the battery driver. Starting with macOS 27, these values were also converted to fake percentages. In this version, StillCore restores the ability to read the actual current and maximum capacity values and converts them to percentages using the system formula with one exception. When the current charge exceeds the system’s 100% threshold, StillCore can display a percentage above 100%.
+
+- Battery percentages can now exceed 100% in the window and menu bar where the required battery data is available.
+- Added a battery status popover with remaining and full charge capacity, plus initial charge, active time, and sleep time for the current unplugged session. The details can be copied as plain text.
+- Charge details remain available on AC power and when the tracker is not running.
+- Legacy tracking sessions start from a fresh baseline after the upgrade.
+
+## Performance fixes
+
+- Optimized some SwiftUI redraws.
+- Fixed a metrics collection performance regression after upgrading to `macmon` 0.10.0. Metrics collection time dropped from 37.7 ms to 8.4 ms on an M4 Pro Mac.
+
+## Other changes
+
+- Merged the floating window’s title bar and app header into a single compact header with window controls.
+- Added `--floating` to launch directly into the floating window, restoring its saved position when available.
+
+## All together
+
+
+
+**Full Changelog**: https://github.com/homm/StillCore/compare/v1.5.1...v2.0.0
+]]></description>
+            <enclosure url="https://github.com/homm/StillCore/releases/download/v2.0.0/StillCore.dmg" length="2172364" type="application/octet-stream" sparkle:edSignature="VJ2Xa1aOy+On+UyHNLHHzc4fRKCKxbmpKe2ZDW4JQ74wJeZEIlzyuqmqutU/TpYDmJKIU/ZZSEcLOle1RrQqDQ=="/>
+        </item>
+        <item>
             <title>1.5.1</title>
             <pubDate>Tue, 03 Nov 2026 06:11:05 +0000</pubDate>
             <sparkle:version>202611022346</sparkle:version>
