@@ -33,7 +33,7 @@ help:
 	@printf '%s\n' \
 		'make app            Build $(NAME).app' \
 		'Add Release to a command for CONFIGURATION=Release (e.g. make run Release)' \
-		'LOCAL=1 make app    Build with local workspace and local macmon xcframework' \
+		'make app LOCAL=1    Build with local workspace and local macmon xcframework' \
 		'make run [ARGS=...] Build and run $(NAME) in this terminal' \
 		'make open-app       Build and open $(NAME).app' \
 		'make helpers-uninstall Build app and uninstall both helpers' \

@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="StillCore is a low-overhead Apple Silicon monitor for the macOS menu bar.">
-  <title>StillCore</title>
+  <meta name="description" content="Understand where your Mac’s power goes. StillCore helps you find demanding processes, track battery drain, and monitor Apple Silicon from your menu bar.">
+  <title>StillCore — Understand your Mac’s energy use</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f7f7f4;
-      --text: #1f2328;
-      --muted: #666d76;
-      --line: #d9d9d2;
-      --panel: #ffffff;
-      --accent: #0f8f3f;
-      --accent-strong: #0b6f31;
+      color-scheme: dark;
+      --bg: #1d2d38;
+      --text: #f2f6f9;
+      --copy: #e2eaf0;
+      --muted: #afc2cf;
+      --line: #405868;
+      --panel: #294052;
+      --accent: #b9f561;
     }
 
     * {
@@ -34,39 +34,44 @@
     }
 
     main {
-      width: min(820px, calc(100% - 32px));
+      width: min(920px, calc(100% - 64px));
       margin: 0 auto;
     }
 
     .menubar {
       position: relative;
-      height: 37px;
+      height: 33px;
       background: #000000;
       overflow: visible;
-      z-index: -2;
     }
 
     .popover {
       position: absolute;
-      top: 0;
-      margin: 0 0 0 512px;
-      z-index: -1;
+      top: -33px;
+      left: 512px;
+      margin: 0;
     }
 
     .popover img {
-      width: 487px;
+      width: 466px;
       display: block;
       height: auto;
     }
 
     .hero {
-      padding: 80px 0 32px;
-      width: 500px;
+      position: relative;
+      min-height: 610px;
+      padding: 80px 0 50px;
+    }
+
+    .hero-copy {
+      width: 460px;
+      max-width: 500px;
     }
 
     .eyebrow {
       margin: 0;
-      color: var(--accent-strong);
+      color: var(--accent);
       font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
@@ -83,7 +88,7 @@
 
     .lede {
       max-width: 680px;
-      color: var(--muted);
+      color: var(--copy);
       font-size: clamp(18px, 2.4vw, 22px);
     }
 
@@ -91,7 +96,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-      margin-top: 32px;
+      margin: 32px 0 20px;
     }
 
     .button {
@@ -112,7 +117,7 @@
     .button.primary {
       border-color: var(--accent);
       background: var(--accent);
-      color: #ffffff;
+      color: var(--bg);
     }
 
     .button svg {
@@ -123,56 +128,228 @@
     }
 
     .button:hover {
-      box-shadow: 0 0 0 2px rgb(31 35 40 / 0.1);
+      box-shadow: 0 0 0 2px var(--line);
     }
 
     .button.primary:hover {
-      box-shadow: 0 0 0 4px rgb(15 143 63 / 0.2);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
     }
 
-    .hero-features {
-      margin-top: 40px;
+    a:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 5px;
     }
 
-    .requirements {
-      border-top: 1px solid var(--line);
+    .compatibility {
+      margin: 10px 0 0;
       color: var(--muted);
+      font-size: 14px;
+    }
+
+    .intro {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 0 50px;
+      color: var(--copy);
+      font-size: 20px;
+      line-height: 1.65;
+    }
+
+    .intro strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .feature {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 64px;
+      padding: 30px 0 50px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-label {
+      margin: 0 0 18px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
     }
 
     h2 {
-      margin: 0 0 16px;
-      font-size: 20px;
-      letter-spacing: 0;
+      margin: 0 0 24px;
+      font-size: clamp(28px, 3.3vw, 42px);
+      line-height: 1.12;
+      letter-spacing: -0.035em;
+      text-wrap: balance;
     }
 
-    ul {
-      display: grid;
-      gap: 10px;
+    .feature p:not(.section-label), .proof-copy p:not(.section-label) {
+      color: var(--copy);
+      font-size: 17px;
+    }
+
+    figure {
       margin: 0;
-      padding-left: 20px;
+    }
+
+    .feature img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    figcaption, .test-note {
+      margin-top: 18px;
       color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .feature.reverse .feature-copy {
+      order: 2;
+    }
+
+    .menu-preview {
+      width: min(100%, 248px);
+      justify-self: center;
+    }
+
+    .proof {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      padding: 48px;
+      background: #213545;
+      border-radius: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    caption {
+      text-align: left;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    th, td {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+
+    th {
+      font-weight: 400;
+      padding-right: 16px;
+    }
+
+    td {
+      white-space: nowrap;
+      text-align: right;
+      font-size: 24px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .story {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 96px 0;
+    }
+
+    blockquote {
+      margin: 24px 0;
+      padding-left: 24px;
+      border-left: 3px solid var(--accent);
+      font-size: 21px;
+      line-height: 1.65;
+    }
+
+    .story-credit {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px 24px;
+      padding: 24px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    footer p {
+      margin: 0;
+    }
+
+    @media (max-width: 800px) {
+      .hero { padding-top: 48px; }
+      .hero-copy { width: 100%; max-width: 560px; }
+      .popover {
+        position: relative;
+        top: 0;
+        left: 0;
+        margin-top: 48px;
+        padding-top: 0;
+      }
+      .popover::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 33px;
+        background: #000;
+      }
+      .popover img { position: relative; width: min(466px, 100%); margin: 0 auto; }
+      .feature, .proof { grid-template-columns: 1fr; }
+      .feature { padding: 48px 0; }
+      .feature.reverse .feature-copy { order: initial; }
+      .feature figure { max-width: 520px; justify-self: center; }
+      .story { padding: 64px 0; }
+    }
+
+    @media (max-width: 440px) {
+      main { width: calc(100% - 32px); }
+      h1 { font-size: 64px; }
+      .proof { padding: 24px; }
+      blockquote { font-size: 19px; padding-left: 18px; }
     }
   </style>
 </head>
 <body>
   <header class="menubar" aria-label="StillCore menu bar preview">
-    
+
   </header>
 
   <main>
-    <figure class="popover">
-      <img src="app.png" alt="StillCore menu bar popover showing Apple Silicon power, frequency, usage, and temperature charts">
-    </figure>
     <section class="hero" aria-label="StillCore overview">
+      <div class="hero-copy">
       <p class="eyebrow">Apple Silicon monitoring</p>
       <h1>StillCore</h1>
-      <p class="lede">Low-overhead power, frequency, usage, temperature, and battery session tracking from the macOS menu bar.</p>
+      <p class="lede">Understand where your Mac’s power goes. Keep an eye on activity, find demanding processes, and track battery drain — right from your menu bar.</p>
       <div class="actions">
-        <a class="button primary" href="https://github.com/homm/StillCore/releases/download/v1.5.0/StillCore.dmg">
+        <a class="button primary" href="https://github.com/homm/StillCore/releases/download/v2.0.0/StillCore.dmg">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.29a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.29V4a1 1 0 0 1 1-1Zm-7 13a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"></path>
           </svg>
-          Download v1.5.0
+          Download v2.0.0
         </a>
         <a class="button" href="https://github.com/homm/StillCore">
           <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -181,21 +358,102 @@
           View source
         </a>
       </div>
-      <div class="hero-features">
-        <h2>What it tracks</h2>
-        <ul>
-          <li>Full-system, chip, CPU, GPU, and ANE power charts.</li>
-          <li>CPU and GPU frequency, usage, and temperature charts.</li>
-          <li>Battery sessions, including drain since the last charge.</li>
-          <li>Update intervals from 100 ms to 10 seconds.</li>
-        </ul>
+      <p class="compatibility">Apple Silicon · macOS 14+ · Free &amp; open source</p>
+      <p class="compatibility"><strong>macOS 27 ready.</strong> If your old monitor stopped reporting power after the upgrade, StillCore can take its place.</p>
+      </div>
+      <figure class="popover">
+        <img src="app.png" width="466" height="620" alt="StillCore opened from the menu bar, showing power, activity, temperature, and top processes">
+      </figure>
+    </section>
+
+    <p class="intro">
+      <strong>Powerful hardware. A polished OS. What’s missing is a sense of control.</strong>
+      <br />
+      Why is your Mac warm? What’s draining the battery? Activity Monitor feels cumbersome
+      when you just want a quick answer: by the time you open it and find your bearings,
+      the spike may be gone. StillCore stays ready in your menu bar, so you can see what’s
+      happening and decide what to do, whenever you need to.
+    </p>
+
+    <section class="feature" aria-labelledby="power-title">
+      <div class="feature-copy">
+        <p class="section-label">Understand the activity</p>
+        <h2 id="power-title">See what’s behind the spike.</h2>
+        <p>Compare total system power with chip power, then see the CPU, GPU, and Neural Engine contributions. Move the chart marker over a spike to inspect the readings.</p>
+        <p>Frequency, usage, and temperature charts give you the context to understand what your Mac is doing.</p>
+      </div>
+      <figure>
+        <img src="power-and-activity.png" width="420" height="167" loading="lazy" alt="Power and activity charts with a marker inspecting a spike in consumption">
+      </figure>
+    </section>
+
+    <section class="feature reverse" aria-labelledby="processes-title">
+      <div class="feature-copy">
+        <p class="section-label">From observation to action</p>
+        <h2 id="processes-title">Find the process. Choose what happens next.</h2>
+        <p>See which processes are using the most CPU, GPU, memory, or CPU power. Filter by application, process name, or PID to narrow the list.</p>
+        <p>Once you’ve found a demanding process, you can quit it or apply a background policy directly from StillCore.</p>
+      </div>
+      <figure>
+        <img src="processes.png" width="420" height="331" loading="lazy" alt="Top Processes sorted by CPU power, with filtering and process controls">
+      </figure>
+    </section>
+
+    <section class="feature" aria-labelledby="battery-title">
+      <div class="feature-copy">
+        <p class="section-label">Away from the charger</p>
+        <h2 id="battery-title">Make sense of every unplugged session.</h2>
+        <p>See how much charge remains and how much you’ve used since unplugging, with separate totals for the time your Mac spent awake and asleep.</p>
+        <p>Switch between Automatic and Power Save modes for your current power source as your priorities change.</p>
+      </div>
+      <figure>
+        <img src="battery.png" width="325" height="225" loading="lazy" alt="Battery details showing charge, drain, and awake and sleep time since unplugging">
+        <figcaption>macOS can report 100% below full capacity. StillCore can show charge above that threshold, so you can see it drop even while macOS still reads 100%.</figcaption>
+      </figure>
+    </section>
+
+    <section class="feature reverse" aria-labelledby="menu-title">
+      <div class="feature-copy">
+        <p class="section-label">There when you need it</p>
+        <h2 id="menu-title">A small place in your menu bar.</h2>
+        <p>Choose the metrics you want at a glance, along with a battery icon or percentage. Open the charts when something catches your attention, or detach the window to keep them visible while you work.</p>
+        <p>Set the update interval from 100 ms to 10 seconds, whether you’re watching a brief burst of activity or keeping an eye on everyday use.</p>
+      </div>
+      <figure class="menu-preview">
+        <img src="menu.png" width="248" height="270" loading="lazy" alt="StillCore menu with customizable menu bar metrics">
+      </figure>
+    </section>
+
+    <section class="proof" aria-labelledby="overhead-title">
+      <div class="proof-copy">
+        <p class="section-label">Low overhead by design</p>
+        <h2 id="overhead-title">Built to stay on.</h2>
+        <p>A monitor is most useful when it’s already running. StillCore is built for continuous, everyday monitoring with low overhead, so it’s always there when something suddenly feels off.</p>
+      </div>
+      <div>
+        <table>
+          <caption>Chip power while StillCore is running</caption>
+          <tbody>
+            <tr><th scope="row">Mac idle, StillCore off</th><td>0.17 W</td></tr>
+            <tr><th scope="row">StillCore in the menu bar<span>1-second update interval</span></th><td>0.17 W</td></tr>
+            <tr><th scope="row">StillCore window open<span>1-second update interval</span></th><td>0.21 W</td></tr>
+          </tbody>
+        </table>
+        <p class="test-note"><a href="https://github.com/homm/StillCore#why-i-built-it">Read about the tests in the README.</a></p>
       </div>
     </section>
 
-    <section class="requirements" aria-label="StillCore details">
-      <p>Requires an Apple Silicon Mac with macOS 14 or newer.</p>
-      <p>MIT licensed. Metrics core by <a href="https://github.com/vladkens/macmon">macmon</a>. Special thanks to Alyosha Gusev.</p>
+    <section class="story" aria-labelledby="story-title">
+      <p class="section-label">A note from the creator</p>
+      <h2 id="story-title">A practical reason to watch the watts.</h2>
+      <blockquote><p>A transatlantic flight lasts about ten hours. I use StillCore to see how much power Civilization VI draws and tune the game settings with one goal in mind: more time playing, less time looking for an outlet.</p></blockquote>
+      <p class="story-credit">One of the everyday reasons I built StillCore. <a href="https://github.com/homm/StillCore#why-i-built-it">More stories behind the app →</a></p>
     </section>
+
+    <footer>
+      <p>StillCore · <a href="https://github.com/homm/StillCore">GitHub</a> · <a href="https://github.com/homm/StillCore/blob/main/LICENSE">MIT licensed</a></p>
+      <p>Metrics core by <a href="https://github.com/vladkens/macmon">macmon</a>. Special thanks to Alyosha Gusev.</p>
+    </footer>
   </main>
 </body>
 </html>
